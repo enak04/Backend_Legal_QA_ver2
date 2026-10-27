@@ -1,0 +1,2 @@
+# understand prompt placeholder
+# Extracts case patches and intent from user message using FAST_MODEL.

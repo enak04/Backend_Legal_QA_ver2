@@ -1,0 +1,2 @@
+# faithfulness prompt placeholder
+# Verifies that presenter text accurately and faithfully reflects the service answer using FAST_MODEL.

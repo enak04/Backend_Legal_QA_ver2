@@ -1,0 +1,2 @@
+# confirm_summary prompt placeholder
+# Generates a clear recap of collected facts for user confirmation using SMART_MODEL.

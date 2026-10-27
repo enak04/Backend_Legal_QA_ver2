@@ -1,0 +1,5 @@
+{
+  "safety_score_min": 1.0,
+  "faithfulness_min": 0.95,
+  "max_turns_allowed": 14
+}

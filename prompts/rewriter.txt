@@ -1,0 +1,2 @@
+# rewriter prompt placeholder
+# Compiles confirmed case items into a clean ServiceQuery using SMART_MODEL.

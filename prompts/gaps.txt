@@ -1,0 +1,2 @@
+# gaps prompt placeholder
+# Identifies missing information gaps in the case using FAST_MODEL.

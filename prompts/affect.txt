@@ -1,0 +1,2 @@
+# affect prompt placeholder
+# Detects user emotional state and crisis flags using FAST_MODEL.

@@ -1,0 +1,2 @@
+# talker prompt placeholder
+# Generates empathetic, helpful conversational replies using SMART_MODEL.

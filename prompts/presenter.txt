@@ -1,0 +1,2 @@
+# presenter prompt placeholder
+# Restates the external service legal answer in friendly chat using SMART_MODEL.

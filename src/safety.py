@@ -13,8 +13,8 @@ Urgency without crisis (e.g. deadlines) does not trigger safety messages.
 """
 
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
 from src.schemas import AffectReading, SafetyDecision

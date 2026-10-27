@@ -14,10 +14,9 @@ Logs which path was used ('primary', 'regenerated', 'fallback').
 import logging
 import re
 import sys
-from typing import Any
 
 from src.case_ops import render_case_summary
-from src.llm import BaseLLM, LLM
+from src.llm import LLM, BaseLLM
 from src.messages import DISCLAIMER
 from src.prompts import load_prompt, render
 from src.schemas import CaseFile, FaithfulnessReport, ServiceResponse
@@ -156,7 +155,7 @@ async def present(
 
     if not code_issues_1 and faith_1.ok and not faith_1.unsupported_claims and not faith_1.omitted_critical:
         session["last_presenter_path"] = "primary"
-        print(f"[Presenter Guard] Path: primary (Passed all checks)", file=sys.stderr)
+        print("[Presenter Guard] Path: primary (Passed all checks)", file=sys.stderr)
         return draft_1
 
     # 2. Problems detected: Regenerate ONCE with problem instructions
@@ -192,10 +191,10 @@ async def present(
 
     if not code_issues_2 and faith_2.ok and not faith_2.unsupported_claims and not faith_2.omitted_critical:
         session["last_presenter_path"] = "regenerated"
-        print(f"[Presenter Guard] Path: regenerated (Passed on retry)", file=sys.stderr)
+        print("[Presenter Guard] Path: regenerated (Passed on retry)", file=sys.stderr)
         return draft_2
 
     # 3. Still failed: Fall back to plain template
     session["last_presenter_path"] = "fallback"
-    print(f"[Presenter Guard] Path: fallback (Template used)", file=sys.stderr)
+    print("[Presenter Guard] Path: fallback (Template used)", file=sys.stderr)
     return fallback_template(service_response, DISCLAIMER)

@@ -8,7 +8,7 @@ Uses:
 """
 
 from src.case_ops import render_case_json_for_prompts, render_case_summary
-from src.llm import BaseLLM, LLM
+from src.llm import LLM, BaseLLM
 from src.prompts import load_prompt, render
 from src.redact import redact_service_query
 from src.schemas import CaseFile, ServiceQuery

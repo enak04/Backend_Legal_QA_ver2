@@ -11,7 +11,7 @@ Supports:
 
 import asyncio
 import time
-from typing import Any
+
 import httpx
 
 from src.config import get_settings

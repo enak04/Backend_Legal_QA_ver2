@@ -5,9 +5,10 @@ Loads configuration from .env using python-dotenv into a typed Settings dataclas
 Fails with a clear, beginner-friendly error message if any required configuration key is missing.
 """
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 

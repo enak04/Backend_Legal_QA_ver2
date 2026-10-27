@@ -38,7 +38,7 @@ def redact_text(text: str) -> str:
 
 def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
     """Recursively redacts string values within dictionaries and lists."""
-    result = {}
+    result: dict[str, Any] = {}
     for k, v in data.items():
         if isinstance(v, str):
             result[k] = redact_text(v)

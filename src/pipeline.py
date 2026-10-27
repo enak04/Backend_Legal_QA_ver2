@@ -17,9 +17,8 @@ Safety checks run in EVERY state before normal handling.
 """
 
 import asyncio
-from collections.abc import AsyncGenerator
 import sys
-from typing import Any
+from collections.abc import AsyncGenerator
 
 from src.affect import affect_to_style_hint, read_affect
 from src.case_ops import apply_patch, render_case_summary
@@ -27,11 +26,11 @@ from src.config import get_settings
 from src.confirm import build_service_query, make_recap
 from src.db import add_message, get_recent_messages, save_case_version, update_session
 from src.gaps import find_gaps
-from src.llm import BaseLLM, LLM
+from src.llm import LLM, BaseLLM
 from src.presenter import present
 from src.readiness import filter_gaps_to_ask, is_ready, track_asked_gap
 from src.safety import decide, detect_keywords
-from src.schemas import AffectReading, CaseFile, Intent, SafetyDecision, ServiceResponse
+from src.schemas import CaseFile, Intent, SafetyDecision, ServiceResponse
 from src.service_client import ServiceClient
 from src.talker import build_talker_reply
 from src.understand import understand
@@ -49,7 +48,7 @@ class ReadyConfirmation(str):
         obj.decision = decision or SafetyDecision()
         return obj
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if other == "READY_FOR_CONFIRMATION":
             return True
         return super().__eq__(other)
@@ -86,7 +85,7 @@ async def handle_turn(
     service_client: ServiceClient | None = None,
     stream: bool = False,
     debug: bool = False,
-) -> tuple[str | AsyncGenerator[str, None], SafetyDecision]:
+) -> tuple[str | AsyncGenerator[str, None], SafetyDecision] | ReadyConfirmation:
     """
     Executes one complete conversational turn according to the state machine:
     COLLECTING -> CONFIRMING -> ANSWERED.

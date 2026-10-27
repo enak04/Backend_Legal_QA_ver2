@@ -7,6 +7,8 @@ to extract intent, language, and case patch (UnderstandOutput).
 
 from datetime import datetime, timezone
 
+UTC = timezone.utc
+
 from src.case_ops import render_case_json_for_prompts
 from src.llm import BaseLLM
 from src.prompts import load_prompt, render
@@ -43,7 +45,7 @@ async def understand(
 
     case_json_str = render_case_json_for_prompts(case_obj)
     recent_formatted = _format_recent_messages_for_prompt(recent_messages or [])
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Load and render extractor prompt
     template, _ = load_prompt("extractor")

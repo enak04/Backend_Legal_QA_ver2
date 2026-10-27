@@ -11,10 +11,9 @@ Wraps user messages in <user_message> tags for security and limits history to HI
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
 from src.config import get_settings
-from src.llm import BaseLLM, LLM
+from src.llm import LLM, BaseLLM
 from src.prompts import load_prompt, render
 from src.schemas import Gap
 
@@ -69,6 +68,51 @@ def _format_conversation_history(messages: list[dict], window_size: int) -> list
         formatted.append({"role": role, "content": content})
 
     return formatted
+
+
+from typing import Literal, overload
+
+
+@overload
+async def build_talker_reply(
+    session: dict,
+    messages: list[dict],
+    llm: BaseLLM | None = None,
+    stream: Literal[False] = False,
+    case_summary: str | None = None,
+    gaps: list[Gap] | list[dict] | str | None = None,
+    language: str | None = None,
+    style_hint: str | None = None,
+    system_notes: str | None = None,
+) -> str: ...
+
+
+@overload
+async def build_talker_reply(
+    session: dict,
+    messages: list[dict],
+    llm: BaseLLM | None = None,
+    stream: Literal[True] = ...,
+    case_summary: str | None = None,
+    gaps: list[Gap] | list[dict] | str | None = None,
+    language: str | None = None,
+    style_hint: str | None = None,
+    system_notes: str | None = None,
+) -> AsyncGenerator[str, None]: ...
+
+
+@overload
+async def build_talker_reply(
+    session: dict,
+    messages: list[dict],
+    llm: BaseLLM | None = None,
+    stream: bool = False,
+    case_summary: str | None = None,
+    gaps: list[Gap] | list[dict] | str | None = None,
+    language: str | None = None,
+    style_hint: str | None = None,
+    system_notes: str | None = None,
+) -> str | AsyncGenerator[str, None]: ...
 
 
 async def build_talker_reply(

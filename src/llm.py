@@ -8,9 +8,9 @@ Provides:
 """
 
 import asyncio
-from collections.abc import AsyncGenerator
 import json
 import time
+from collections.abc import AsyncGenerator
 from typing import Any, TypeVar
 
 import httpx
@@ -25,7 +25,6 @@ T = TypeVar("T", bound=BaseModel)
 
 class LLMOutputError(Exception):
     """Raised when an LLM fails to return valid output matching the requested schema."""
-    pass
 
 
 class BaseLLM:
@@ -45,6 +44,39 @@ class BaseLLM:
             return version
         except Exception:
             return "unknown"
+
+    async def text(
+        self,
+        prompt_name: str,
+        system: str,
+        messages: list[dict],
+        tier: str,
+        temperature: float = 0.3,
+        session_id: str | None = None,
+    ) -> str:
+        raise NotImplementedError
+
+    async def json(
+        self,
+        prompt_name: str,
+        system: str,
+        messages: list[dict],
+        schema: type[T],
+        tier: str,
+        session_id: str | None = None,
+    ) -> T:
+        raise NotImplementedError
+
+    async def stream(
+        self,
+        prompt_name: str,
+        system: str,
+        messages: list[dict],
+        tier: str,
+        session_id: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        raise NotImplementedError
+        yield ""  # pragma: no cover
 
 
 class LLM(BaseLLM):

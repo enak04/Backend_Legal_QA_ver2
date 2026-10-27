@@ -7,17 +7,18 @@ and TTL indexes as specified in ARCHITECTURE.md.
 """
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any
+import json
 import uuid
+from datetime import datetime, timezone
+
+UTC = timezone.utc
+from pathlib import Path
+from typing import Any
 
 import pymongo
 from pymongo.database import Database
 
 from src.config import get_settings
-
-import json
-from pathlib import Path
 
 # Local storage path for offline dev persistence when MongoDB server is not running
 LOCAL_STORE_PATH = Path(__file__).resolve().parent.parent / ".mongo_dev_data.json"
@@ -59,7 +60,7 @@ def _persist_mock_if_needed(target_db: Database) -> None:
 
 def _create_persistent_mock_db(db_name: str) -> Database:
     import mongomock
-    client = mongomock.MongoClient()
+    client: Any = mongomock.MongoClient()
     db = client[db_name]
     db._is_mock_persistence = True
 
@@ -90,7 +91,7 @@ def get_db(client: Any | None = None, db_name: str | None = None) -> Database:
     if _database is None:
         settings = get_settings()
         try:
-            candidate = pymongo.MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=1000)
+            candidate: Any = pymongo.MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=1000)
             candidate.admin.command("ping")
             _mongo_client = candidate
             _database = _mongo_client[settings.db_name]
@@ -147,10 +148,10 @@ def _create_session_sync(
     db: Database | None = None,
 ) -> dict:
     target_db = db or get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sid = session_id or str(uuid.uuid4())
 
-    session_doc = {
+    session_doc: dict[str, Any] = {
         "_id": sid,
         "user_id": user_id,
         "status": "COLLECTING",
@@ -182,7 +183,7 @@ def _get_session_sync(session_id: str, db: Database | None = None) -> dict | Non
 def _update_session_sync(session_id: str, updates: dict, db: Database | None = None) -> bool:
     target_db = db or get_db()
     updates = dict(updates)
-    updates["updated_at"] = datetime.now(timezone.utc)
+    updates["updated_at"] = datetime.now(UTC)
     result = target_db.sessions.update_one({"_id": session_id}, {"$set": updates})
     _persist_mock_if_needed(target_db)
     return result.matched_count > 0
@@ -196,7 +197,7 @@ def _add_message_sync(
     db: Database | None = None,
 ) -> dict:
     target_db = db or get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     msg_doc = {
         "_id": str(uuid.uuid4()),
         "session_id": session_id,
@@ -244,7 +245,7 @@ def _save_case_version_sync(
     db: Database | None = None,
 ) -> dict:
     target_db = db or get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     version_doc = {
         "_id": str(uuid.uuid4()),
         "session_id": session_id,
@@ -273,7 +274,7 @@ def _log_llm_call_sync(
     db: Database | None = None,
 ) -> dict:
     target_db = db or get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     log_doc = {
         "_id": str(uuid.uuid4()),
         "session_id": session_id,
@@ -303,7 +304,7 @@ def _log_service_call_sync(
     db: Database | None = None,
 ) -> dict:
     target_db = db or get_db()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     call_doc = {
         "_id": str(uuid.uuid4()),
         "session_id": session_id,

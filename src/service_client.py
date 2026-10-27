@@ -70,18 +70,37 @@ class ServiceClient:
         for attempt in range(retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    # Support Base_Legal_QA /predict endpoint, with fallback to /answer
+                    url = f"{self.service_url}/predict"
+                    payload = {"question": query.query_text}
                     response = await client.post(
-                        f"{self.service_url}/answer",
-                        json=request_data,
+                        url,
+                        json=payload,
                         headers=headers,
                     )
+                    if response.status_code == 404:
+                        url = f"{self.service_url}/answer"
+                        response = await client.post(
+                            url,
+                            json=request_data,
+                            headers=headers,
+                        )
                     response.raise_for_status()
                     data = response.json()
-                    resp = ServiceResponse.model_validate(data)
+                    if "answer" in data and "status" not in data:
+                        # Base_Legal_QA returns {"question": ..., "answer": ..., "reasoning_chain": [...]}
+                        resp = ServiceResponse(
+                            status="answered",
+                            answer=data["answer"],
+                            citations=data.get("reasoning_chain", []),
+                        )
+                    else:
+                        resp = ServiceResponse.model_validate(data)
+
                     latency_ms = int((time.time() - start_time) * 1000)
                     await log_service_call(
                         session_id=sid,
-                        request=request_data,
+                        request=payload,
                         response=resp.model_dump(),
                         latency_ms=latency_ms,
                         status=resp.status,

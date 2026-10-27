@@ -164,8 +164,14 @@ async def handle_turn(
     # STATE: CONFIRMING
     # -----------------------------------------------------------------------
     if current_status == "CONFIRMING":
-        # Check if intent is confirms
-        if understand_out.intent == Intent.confirms:
+        # Check if intent is confirms or user demands answer
+        msg_lower = user_message.strip().lower()
+        is_confirming = (
+            understand_out.intent in (Intent.confirms, Intent.wants_answer_now)
+            or understand_out.wants_answer_now
+            or any(w in msg_lower for w in ["yes", "proceed", "give me answer", "give answer", "answer", "ok", "sure", "correct", "right", "ahead", "help"])
+        )
+        if is_confirming:
             # Build ServiceQuery (SMART tier, with PII redaction)
             query = await build_service_query(case=case_obj, llm=client, session=session)
             session["last_service_query"] = query.model_dump()

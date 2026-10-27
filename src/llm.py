@@ -90,6 +90,12 @@ class LLM(BaseLLM):
         self.api_key = api_key or settings.llm_api_key
         self.base_url = base_url.rstrip("/")
         self.timeout = httpx.Timeout(30.0, connect=10.0)
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
 
     async def _request_with_retry(self, payload: dict, is_stream: bool = False) -> Any:
         """
@@ -107,13 +113,12 @@ class LLM(BaseLLM):
 
         for attempt in range(retries + 1):
             try:
-                client = httpx.AsyncClient(timeout=self.timeout)
+                client = self._get_client()
                 if is_stream:
                     request = client.build_request("POST", url, json=payload, headers=headers)
                     response = await client.send(request, stream=True)
                 else:
-                    async with client:
-                        response = await client.post(url, json=payload, headers=headers)
+                    response = await client.post(url, json=payload, headers=headers)
 
                 if response.status_code in (429, 500, 502, 503, 504):
                     if attempt < retries:
@@ -328,7 +333,7 @@ class LLM(BaseLLM):
 
         try:
             response = await self._request_with_retry(payload, is_stream=True)
-            async with response:
+            try:
                 async for line in response.aiter_lines():
                     if not line:
                         continue
@@ -345,7 +350,9 @@ class LLM(BaseLLM):
                                 yield content_piece
                         except json.JSONDecodeError:
                             continue
-            success = True
+                success = True
+            finally:
+                await response.aclose()
         except Exception as e:
             error_msg = str(e)
             raise e

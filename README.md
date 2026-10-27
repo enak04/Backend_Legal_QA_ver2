@@ -54,6 +54,12 @@ Update your `.env` file with:
 
 ### 4. Running the Project
 
+- **Run the Web API & Interface (FastAPI):**
+  ```bash
+  uvicorn app:app --reload
+  ```
+  Then open your browser to `http://localhost:8000` to interact with the web chat interface.
+
 - **Run tests:**
   ```bash
   pytest
@@ -61,6 +67,10 @@ Update your `.env` file with:
 - **Run the CLI / Interactive entry point:**
   ```bash
   python main.py
+  ```
+- **Run the Evaluation Harness:**
+  ```bash
+  python evals/run_evals.py --n 3
   ```
 
 ---
@@ -71,11 +81,12 @@ Update your `.env` file with:
 |---|---|
 | `ARCHITECTURE.md` | The core design document and single source of truth for architecture, golden rules, states, and data models. |
 | `README.md` | Beginner guide explaining what the bot does, how to set it up, and what every file is for. |
-| `requirements.txt` | Lists Python library dependencies (Pydantic v2, pymongo, httpx, python-dotenv, pytest). |
+| `requirements.txt` | Lists Python library dependencies (FastAPI, uvicorn, Pydantic v2, pymongo, httpx, python-dotenv, pytest). |
 | `.env.example` | Template containing all required environment variables and their default settings. |
 | `.gitignore` | Tells Git which files to ignore (like `.venv`, secrets in `.env`, and cache files). |
 | `main.py` | Command-line entry point to launch and test the chatbot interactively. |
-| `app.py` | Application entry point reserved for web server APIs (such as FastAPI). |
+| `app.py` | FastAPI application with session management, SSE streaming, authentication, and concurrency serialization. |
+| `web/index.html` | Clean, mobile-friendly single-page chat interface with consent verification and "Delete my data". |
 | `config/helplines.json` | Contains verified crisis, emergency, and support helpline telephone numbers. |
 | `prompts/understand.txt` | Prompt instructions for the fast model to extract facts and user intent. |
 | `prompts/affect.txt` | Prompt instructions for the fast model to detect user emotions and crisis flags. |

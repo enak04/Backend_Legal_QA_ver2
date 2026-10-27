@@ -16,3 +16,5 @@ def setup_test_environment():
     os.environ["MONGODB_URI"] = "mongodb://localhost:27017"
     os.environ["DB_NAME"] = "test_legal_intake_bot"
     os.environ["USE_MOCK_SERVICE"] = "true"
+    os.environ["APP_API_KEY"] = "test_app_key"
+    os.environ["ALLOWED_ORIGINS"] = "*"

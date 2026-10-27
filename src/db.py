@@ -219,6 +219,23 @@ def _get_recent_messages_sync(session_id: str, n: int, db: Database | None = Non
     return docs
 
 
+def _get_all_messages_sync(session_id: str, db: Database | None = None) -> list[dict]:
+    target_db = db or get_db()
+    cursor = target_db.messages.find({"session_id": session_id}).sort("ts", pymongo.ASCENDING)
+    return list(cursor)
+
+
+def _delete_session_sync(session_id: str, db: Database | None = None) -> bool:
+    target_db = db or get_db()
+    target_db.sessions.delete_one({"_id": session_id})
+    target_db.messages.delete_many({"session_id": session_id})
+    target_db.case_versions.delete_many({"session_id": session_id})
+    target_db.llm_logs.delete_many({"session_id": session_id})
+    target_db.service_calls.delete_many({"session_id": session_id})
+    _persist_mock_if_needed(target_db)
+    return True
+
+
 def _save_case_version_sync(
     session_id: str,
     version: int,
@@ -426,3 +443,13 @@ async def log_service_call(
         status=status,
         db=db,
     )
+
+
+async def get_all_messages(session_id: str, db: Database | None = None) -> list[dict]:
+    """Async wrapper to get all messages for a session in chronological order."""
+    return await asyncio.to_thread(_get_all_messages_sync, session_id=session_id, db=db)
+
+
+async def delete_session(session_id: str, db: Database | None = None) -> bool:
+    """Async wrapper to permanently delete a session and all related records across all collections."""
+    return await asyncio.to_thread(_delete_session_sync, session_id=session_id, db=db)

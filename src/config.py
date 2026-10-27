@@ -28,6 +28,8 @@ class Settings:
     max_collecting_turns: int
     session_ttl_days: int
     debug: bool
+    app_api_key: str = "test_app_key"
+    allowed_origins: tuple[str, ...] = ("*",)
 
 
 def _str_to_bool(value: str | None, default: bool = False) -> bool:
@@ -90,6 +92,10 @@ def load_settings(env_path: str | Path | None = None) -> Settings:
         max_collecting_turns=int(os.getenv("MAX_COLLECTING_TURNS", "14")),
         session_ttl_days=int(os.getenv("SESSION_TTL_DAYS", "30")),
         debug=_str_to_bool(os.getenv("DEBUG"), default=False),
+        app_api_key=os.getenv("APP_API_KEY", "test_app_key").strip() or "test_app_key",
+        allowed_origins=tuple(
+            o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
+        ),
     )
 
 

@@ -18,3 +18,4 @@ def setup_test_environment():
     os.environ["USE_MOCK_SERVICE"] = "true"
     os.environ["APP_API_KEY"] = "test_app_key"
     os.environ["ALLOWED_ORIGINS"] = "*"
+    os.environ["DIRECT_SERVICE_ANSWER"] = "false"

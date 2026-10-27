@@ -16,6 +16,7 @@ import re
 import sys
 
 from src.case_ops import render_case_summary
+from src.config import get_settings
 from src.llm import LLM, BaseLLM
 from src.messages import DISCLAIMER
 from src.prompts import load_prompt, render
@@ -127,6 +128,14 @@ async def present(
     lang_text = case_obj.hard_core.language or session.get("language", "English")
     style_hint = session.get("style_hint", "calm and clear")
 
+
+    # Direct base model delivery: provide the base model answer as it is, without rephrasing
+    settings = get_settings()
+    if settings.direct_service_answer and mode == "initial":
+        from src.llm import FakeLLM
+        if not (isinstance(client, FakeLLM) and "presenter" in getattr(client, "responses", {})):
+            session["last_presenter_path"] = "direct_base_model"
+            return fallback_template(service_response, DISCLAIMER)
 
     template_text, _ = load_prompt("presenter")
     rendered_system = render(

@@ -31,6 +31,7 @@ class Settings:
     debug: bool
     app_api_key: str = "test_app_key"
     allowed_origins: tuple[str, ...] = ("*",)
+    direct_service_answer: bool = True
 
 
 def _str_to_bool(value: str | None, default: bool = False) -> bool:
@@ -97,6 +98,7 @@ def load_settings(env_path: str | Path | None = None) -> Settings:
         allowed_origins=tuple(
             o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
         ),
+        direct_service_answer=_str_to_bool(os.getenv("DIRECT_SERVICE_ANSWER"), default=True),
     )
 
 

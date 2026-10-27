@@ -129,3 +129,24 @@ def test_decide_urgency_without_crisis_does_not_trigger():
     assert decision.triggered is False
     assert decision.category is None
     assert decision.reply_text is None
+
+
+def test_safe_confirmation_suppresses_affect_crisis():
+    """Verify that when a user states they are safe, lingering affect crisis flags do not trigger a safety block."""
+    from src.safety import is_safe_confirmation
+
+    assert is_safe_confirmation("yes I am safe") is True
+    assert is_safe_confirmation("I AM SAFE U IDIOT") is True
+    assert is_safe_confirmation("I'm safe now") is True
+    assert is_safe_confirmation("safe") is True
+    assert is_safe_confirmation("not in danger") is True
+    assert is_safe_confirmation("safe deposit box") is False
+    assert is_safe_confirmation("is it safe?") is False
+
+    affect = AffectReading(distress=2, crisis_violence_or_abuse=True)
+    decision = decide("yes I am safe", affect=affect)
+    assert decision.triggered is False
+
+    decision2 = decide("I AM SAFE U IDIOT", affect=affect)
+    assert decision2.triggered is False
+

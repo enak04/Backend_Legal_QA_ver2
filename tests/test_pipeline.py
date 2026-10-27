@@ -13,7 +13,7 @@ import pytest
 from src.db import create_session, get_recent_messages, get_session
 from src.llm import FakeLLM
 from src.pipeline import handle_turn
-from src.schemas import AffectReading, CasePatch, Intent, NewFact, UnderstandOutput
+from src.schemas import AffectReading, CasePatch, Intent, NewFact, Source, UnderstandOutput
 
 
 @pytest.mark.asyncio
@@ -93,3 +93,41 @@ async def test_pipeline_next_turn_after_safety_injects_system_note():
     # Verify that the system prompt sent to talker contains the warning
     talker_system_prompt = talker_calls[0]["system"]
     assert "A safety message was already shown. Check in gently and do not repeat it." in talker_system_prompt
+
+
+@pytest.mark.asyncio
+async def test_pipeline_safe_confirmation_breaks_safety_loop():
+    """
+    Verify that when user confirms they are safe after violence_abuse was flagged,
+    even if affect model still sets crisis_violence_or_abuse=True, the pipeline does NOT
+    repeat the helpline, calls the talker, and injects safe confirmation notes.
+    """
+    fake = FakeLLM(responses={
+        "extractor": UnderstandOutput(
+            intent=Intent.confirms,
+            patch=CasePatch(add_facts=[NewFact(text="User confirmed they are in a safe place", source=Source.user_said, confidence=1.0)]),
+        ),
+        "affect": AffectReading(distress=1, crisis_violence_or_abuse=True),
+        "talker": "I am glad to hear you are safe now. Let us discuss the divorce threat and your footage.",
+    })
+
+    session = await create_session()
+    session["safety_flags"] = ["violence_abuse"]
+
+    reply, decision = await handle_turn(
+        session=session,
+        user_message="yes I am safe",
+        llm=fake,
+        stream=False,
+    )
+
+    assert decision.triggered is False
+
+    # Check that talker was called
+    talker_calls = [c for c in fake.call_history if c["prompt_name"] == "talker"]
+    assert len(talker_calls) == 1
+
+    talker_system_prompt = talker_calls[0]["system"]
+    assert "A safety message was already shown. Check in gently and do not repeat it." in talker_system_prompt
+    assert "The user explicitly confirmed they are currently safe." in talker_system_prompt
+

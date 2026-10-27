@@ -128,6 +128,24 @@ FALSE_POSITIVES_EXCLUSIONS = [
 ]
 
 
+# Explicit safe confirmation detection (user replying that they are currently safe)
+SAFE_CONFIRMATION_REGEX = re.compile(
+    r"\b("
+    r"(?:yes,?\s*)?(?:i\s*am|i'?m|we\s*are|we'?re|currently|feel)\s*(?:completely\s*)?(?:safe|fine|okay|ok|in\s+no\s+danger|out\s+of\s+danger|not\s+in\s+danger)|"
+    r"not\s+in\s+(?:immediate\s+)?danger|out\s+of\s+danger|no\s+danger\s+here|no\s+danger\s+now|"
+    r"safe\s+(?:u|you)\s+idiot"
+    r")\b|"
+    r"^(?:yes,?\s*)?safe(?:[.!,?].*)?$",
+    re.IGNORECASE,
+)
+
+
+def is_safe_confirmation(message: str) -> bool:
+    """Detects whether user is confirming that they are safe or out of danger."""
+    clean = message.strip()
+    return bool(SAFE_CONFIRMATION_REGEX.search(clean))
+
+
 def detect_keywords(message: str) -> str | None:
     """
     Evaluates message against safety regexes in priority order:
@@ -166,12 +184,20 @@ def decide(
     message: str,
     affect: AffectReading | None = None,
     language: str = "English",
+    existing_safety_flags: list[str] | None = None,
 ) -> SafetyDecision:
     """
     Makes safety escalation decision based on keyword hit OR affect crisis flags.
     Priority: self_harm > violence_abuse > child_safety > arrest_detention.
     """
-    keyword_cat = detect_keywords(message)
+    clean_msg = message.strip()
+    user_confirms_safe = is_safe_confirmation(clean_msg)
+    keyword_cat = detect_keywords(clean_msg)
+
+    # If the user explicitly states they are safe/not in danger, and no active crisis keywords
+    # are present in the current message, do NOT trigger safety from lingering affect flags.
+    if user_confirms_safe and not keyword_cat:
+        return SafetyDecision(triggered=False, category=None, reply_text=None, source=None)
 
     # Check categories by strict priority
     # Priority 1: self_harm
@@ -182,7 +208,7 @@ def decide(
             reply_text=get_helpline_reply("self_harm", language),
             source="keywords",
         )
-    if affect and affect.crisis_self_harm:
+    if affect and affect.crisis_self_harm and not user_confirms_safe:
         return SafetyDecision(
             triggered=True,
             category="self_harm",
@@ -198,7 +224,7 @@ def decide(
             reply_text=get_helpline_reply("violence_abuse", language),
             source="keywords",
         )
-    if affect and affect.crisis_violence_or_abuse:
+    if affect and affect.crisis_violence_or_abuse and not user_confirms_safe:
         return SafetyDecision(
             triggered=True,
             category="violence_abuse",
@@ -223,7 +249,7 @@ def decide(
             reply_text=get_helpline_reply("arrest_detention", language),
             source="keywords",
         )
-    if affect and affect.crisis_detention:
+    if affect and affect.crisis_detention and not user_confirms_safe:
         return SafetyDecision(
             triggered=True,
             category="arrest_detention",

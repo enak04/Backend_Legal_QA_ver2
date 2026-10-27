@@ -29,7 +29,7 @@ from src.gaps import find_gaps
 from src.llm import LLM, BaseLLM
 from src.presenter import present
 from src.readiness import filter_gaps_to_ask, is_ready, track_asked_gap
-from src.safety import decide, detect_keywords
+from src.safety import decide, detect_keywords, is_safe_confirmation
 from src.schemas import CaseFile, Intent, SafetyDecision, ServiceResponse
 from src.service_client import ServiceClient
 from src.talker import build_talker_reply
@@ -125,34 +125,56 @@ async def handle_turn(
     preferred_lang = case_obj.hard_core.language or affect_out.language or "English"
 
     # 4. Safety decision (runs in EVERY state)
+    existing_safety_flags = session.get("safety_flags") or []
     safety_decision = decide(
         message=user_message,
         affect=affect_out,
         language=preferred_lang,
+        existing_safety_flags=existing_safety_flags,
     )
 
     if safety_decision.triggered:
-        if "safety_flags" not in session or session["safety_flags"] is None:
-            session["safety_flags"] = []
-        if safety_decision.category not in session["safety_flags"]:
+        # If this safety category was ALREADY shown previously in this session,
+        # DO NOT repeat the canned helpline message! Continue with normal intake.
+        if safety_decision.category in existing_safety_flags:
+            safety_decision = SafetyDecision(triggered=False, category=None, reply_text=None, source=None)
+        else:
+            if "safety_flags" not in session or session["safety_flags"] is None:
+                session["safety_flags"] = []
             session["safety_flags"].append(safety_decision.category)
 
-        await update_session(session_id=session_id, updates={
-            "case_file": session.get("case_file", {}),
-            "case_version": session.get("case_version", 0),
-            "turn_count": turn_num,
-            "safety_flags": session["safety_flags"],
-        })
+            # In accordance with ARCHITECTURE.md Rule 31: the case still gets updated
+            updated_case, change_report = apply_patch(
+                case=case_obj,
+                patch=understand_out.patch,
+                user_message=user_message,
+                turn=turn_num,
+            )
+            await save_case_version(
+                session_id=session_id,
+                version=updated_case.version,
+                patch=understand_out.patch.model_dump(),
+                full_case=updated_case.model_dump(),
+            )
+            session["case_file"] = updated_case.model_dump()
+            session["case_version"] = updated_case.version
 
-        if debug:
-            print(f"\n[DEBUG SAFETY] Triggered: {safety_decision.category}", file=sys.stderr)
+            await update_session(session_id=session_id, updates={
+                "case_file": session["case_file"],
+                "case_version": session["case_version"],
+                "turn_count": turn_num,
+                "safety_flags": session["safety_flags"],
+            })
 
-        reply_text = safety_decision.reply_text or ""
-        if stream:
-            return _async_string_stream(reply_text, session_id=session_id, affect_dict=affect_out.model_dump()), safety_decision
-        else:
-            await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
-            return reply_text, safety_decision
+            if debug:
+                print(f"\n[DEBUG SAFETY] Triggered: {safety_decision.category}", file=sys.stderr)
+
+            reply_text = safety_decision.reply_text or ""
+            if stream:
+                return _async_string_stream(reply_text, session_id=session_id, affect_dict=affect_out.model_dump()), safety_decision
+            else:
+                await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
+                return reply_text, safety_decision
 
     # Current state dispatch
     current_status = session.get("status", "COLLECTING")
@@ -449,6 +471,12 @@ async def handle_turn(
     notes_list: list[str] = []
     if session.get("safety_flags"):
         notes_list.append("A safety message was already shown. Check in gently and do not repeat it.")
+
+    if is_safe_confirmation(user_message):
+        notes_list.append(
+            "The user explicitly confirmed they are currently safe. "
+            "Acknowledge their safety in one brief sentence, then proceed directly with addressing their legal issue."
+        )
 
     if user_wants_now and (not updated_case.hard_core.jurisdiction or not updated_case.hard_core.user_goal):
         notes_list.append(

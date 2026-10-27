@@ -1,6 +1,97 @@
 {
-  "emergency": "911",
-  "crisis_text_line": "741741",
-  "suicide_and_crisis_lifeline": "988",
-  "domestic_violence_hotline": "1-800-799-7233"
+  "country": "US",
+  "categories": {
+    "self_harm": {
+      "contacts": [
+        {
+          "name": "Suicide & Crisis Lifeline",
+          "number": "988"
+        },
+        {
+          "name": "Crisis Text Line",
+          "number": "Text HOME to 741741"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please connect with the Suicide & Crisis Lifeline at 988 or text HOME to 741741. Free, confidential support is available 24/7. Whenever you are ready, you can continue this conversation here.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] कृपया तुरंत 988 पर कॉल करें या 741741 पर HOME लिखकर संदेश भेजें। यह पूरी तरह से गोपनीय और निःशुल्क है। जब भी आप सहज महसूस करें, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please turant 988 par call karein ya 741741 par HOME text karein. Yeh free aur confidential help 24/7 uplabdh hai. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Por favor llame al 988 o envíe un mensaje de texto con la palabra HOME al 741741. Es gratuito y confidencial las 24 horas. Puede continuar esta conversación cuando esté listo."
+      }
+    },
+    "violence_abuse": {
+      "contacts": [
+        {
+          "name": "National Domestic Violence Hotline",
+          "number": "1-800-799-7233"
+        },
+        {
+          "name": "Crisis Text Line",
+          "number": "Text START to 88788"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please reach the National Domestic Violence Hotline at 1-800-799-7233 or text START to 88788 for immediate confidential support. You are always welcome to continue this intake whenever it is safe for you.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] कृपया तत्काल 1-800-799-7233 पर कॉल करें या 88788 पर START लिखकर संदेश भेजें। आपकी सुरक्षा सबसे महत्वपूर्ण है। जब भी आपके लिए सुरक्षित हो, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please 1-800-799-7233 par call karein ya 88788 par START text karein. Aapki safety sabse zaroori hai. Jab bhi aapke liye safe ho, aap yahan apni baat continue kar sakte hain.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Por favor llame al 1-800-799-7233 o envíe un mensaje de texto con la palabra START al 88788. Puede continuar esta conversación cuando sea seguro para usted."
+      }
+    },
+    "child_safety": {
+      "contacts": [
+        {
+          "name": "Childhelp National Child Abuse Hotline",
+          "number": "1-800-422-4453"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please contact the Childhelp National Hotline at 1-800-422-4453 for confidential guidance and immediate assistance. You may continue sharing details here whenever you are ready.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] कृपया बच्चों की सुरक्षा और सहायता के लिए 1-800-422-4453 पर कॉल करें। जब भी आप तैयार हों, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Please child safety ke liye 1-800-422-4453 par call karein. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Por favor llame a la Línea Nacional de Abuso Infantil al 1-800-422-4453. Puede continuar esta conversación cuando esté listo."
+      }
+    },
+    "arrest_detention": {
+      "contacts": [
+        {
+          "name": "Emergency Legal Aid Hotline",
+          "number": "1-800-529-4357"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] If someone has been arrested or is facing detention, please contact the legal aid helpline at 1-800-529-4357 or a local criminal defense attorney immediately. You have the right to remain silent and request counsel. You can continue this chat whenever you are ready.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] यदि किसी को गिरफ्तार या हिरासत में लिया गया है, तो तुरंत 1-800-529-4357 पर कानूनी सहायता हेल्पलाइन या किसी वकील से संपर्क करें। आप जब चाहें यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Agar kisi ko arrest ya detain kiya gaya hai, toh turant 1-800-529-4357 par legal aid ya local defense lawyer se sampark karein. Aap jab chahein yahan baat continue kar sakte hain.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Si alguien ha sido arrestado o detenido, llame al 1-800-529-4357 para obtener ayuda legal inmediata. Tiene derecho a guardar silencio. Puede continuar este chat cuando esté listo."
+      }
+    },
+    "legal_aid": {
+      "contacts": [
+        {
+          "name": "Legal Aid Services",
+          "number": "1-800-555-5342"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] You can connect with free or low-cost civil legal aid at 1-800-555-5342.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] आप 1-800-555-5342 पर निःशुल्क कानूनी सहायता से संपर्क कर सकते हैं।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Aap 1-800-555-5342 par free legal aid se sampark kar sakte hain.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Puede comunicarse con servicios de ayuda legal al 1-800-555-5342."
+      }
+    },
+    "general_emergency": {
+      "contacts": [
+        {
+          "name": "Emergency Services",
+          "number": "911"
+        }
+      ],
+      "messages": {
+        "en": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] If you are in immediate physical danger, please call 911 immediately.",
+        "hi": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] यदि आप तत्काल खतरे में हैं, तो कृपया तुरंत 911 पर कॉल करें।",
+        "hinglish": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Agar aap kisi khatre mein hain, toh turant 911 par call karein.",
+        "es": "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] Si se encuentra en peligro inmediato, llame al 911 de inmediato."
+      }
+    }
+  }
 }

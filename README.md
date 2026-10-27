@@ -117,3 +117,6 @@ Update your `.env` file with:
 | `tests/test_talker.py` | Tests for talker prompt assembly and `<user_message>` tag wrapping. |
 | `tests/test_case_ops.py` | Tests for case operations, patch application, deduplication, and anti-hallucination downgrading. |
 | `tests/test_understand.py` | Tests for the understand step using extractor prompt and FakeLLM. |
+| `tests/test_affect.py` | Tests for affect readings and style hint derivation rules. |
+| `tests/test_safety.py` | Over 55-sentence benchmark tests for keyword safety, false positive resistance, and priority order. |
+| `tests/test_pipeline.py` | Pipeline integration tests verifying parallel execution, crisis escalation, and subsequent turn warnings. |

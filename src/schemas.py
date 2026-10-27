@@ -213,3 +213,26 @@ class UnderstandOutput(BaseModel):
     language: str = "English"
     patch: CasePatch = Field(default_factory=CasePatch)
     change_summary: str = ""
+
+
+class AffectReading(BaseModel):
+    """Output schema for the 'affect' emotion and crisis detector LLM step."""
+    distress: int = Field(default=0, ge=0, le=3)
+    anger: int = Field(default=0, ge=0, le=3)
+    confusion: int = Field(default=0, ge=0, le=3)
+    shame: int = Field(default=0, ge=0, le=3)
+    urgency: int = Field(default=0, ge=0, le=3)
+    crisis_self_harm: bool = False
+    crisis_violence_or_abuse: bool = False
+    crisis_detention: bool = False
+    language: str = "English"
+    style_note: str = ""
+
+
+class SafetyDecision(BaseModel):
+    """Represents a safety escalation decision."""
+    triggered: bool = False
+    category: str | None = None
+    reply_text: str | None = None
+    source: str | None = None  # "keywords" or "affect"
+

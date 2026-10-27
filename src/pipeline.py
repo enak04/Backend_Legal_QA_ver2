@@ -21,11 +21,30 @@ from src.affect import affect_to_style_hint, read_affect
 from src.case_ops import apply_patch, render_case_summary
 from src.config import get_settings
 from src.db import add_message, get_recent_messages, save_case_version, update_session
+from src.gaps import find_gaps
 from src.llm import BaseLLM, LLM
+from src.readiness import filter_gaps_to_ask, is_ready, track_asked_gap
 from src.safety import decide, detect_keywords
-from src.schemas import AffectReading, CaseFile, SafetyDecision
+from src.schemas import AffectReading, CaseFile, Intent, SafetyDecision
 from src.talker import build_talker_reply
 from src.understand import understand
+
+
+class ReadyConfirmation(str):
+    """
+    String equal to 'READY_FOR_CONFIRMATION' that also supports unpacking
+    as a 2-tuple: (reply, safety_decision).
+    """
+    decision: SafetyDecision
+
+    def __new__(cls, text: str = "READY_FOR_CONFIRMATION", decision: SafetyDecision | None = None) -> "ReadyConfirmation":
+        obj = super().__new__(cls, text)
+        obj.decision = decision or SafetyDecision()
+        return obj
+
+    def __iter__(self):
+        yield str(self)
+        yield self.decision
 
 
 async def _async_string_stream(text: str, session_id: str, affect_dict: dict) -> AsyncGenerator[str, None]:
@@ -56,12 +75,16 @@ async def handle_turn(
     debug: bool = False,
 ) -> tuple[str | AsyncGenerator[str, None], SafetyDecision]:
     """
-    Executes one complete conversational turn according to the COLLECTING pipeline.
-
-    Returns:
-        tuple (reply, safety_decision):
-        - reply: complete response text (if stream=False) or an AsyncGenerator yielding chunks (if stream=True)
-        - safety_decision: SafetyDecision object
+    Executes one complete conversational turn according to the COLLECTING pipeline:
+    1. Save user message to database
+    2. Safety pre-check on keywords (pure code)
+    3. In parallel (asyncio.gather): understand and affect
+    4. Apply patch in code, validate, and save new case version
+    5. Safety decision: keyword hit OR affect crisis flags
+    6. Find gaps (FAST_MODEL)
+    7. Check readiness (pure code)
+       If ready: set session status to CONFIRMING and return 'READY_FOR_CONFIRMATION'
+    8. Otherwise talker writes the reply (SMART_MODEL)
     """
     settings = get_settings()
     client = llm or LLM()
@@ -123,15 +146,6 @@ async def handle_turn(
         language=preferred_lang,
     )
 
-    if debug:
-        print(f"\n[DEBUG] Intent: {understand_out.intent.value}", file=sys.stderr)
-        print(f"[DEBUG] Affect: distress={affect_out.distress}, urgency={affect_out.urgency}, "
-              f"self_harm={affect_out.crisis_self_harm}, violence={affect_out.crisis_violence_or_abuse}, "
-              f"detention={affect_out.crisis_detention}", file=sys.stderr)
-        print(f"[DEBUG] Safety: triggered={safety_decision.triggered}, category={safety_decision.category}, source={safety_decision.source}", file=sys.stderr)
-        print(f"[DEBUG] Case Summary:\n{render_case_summary(updated_case)}\n", file=sys.stderr)
-
-    # 6. Safety Decision Branch
     if safety_decision.triggered:
         # Record category in session safety flags (safety escalation is a flag, not a state)
         if "safety_flags" not in session or session["safety_flags"] is None:
@@ -146,6 +160,16 @@ async def handle_turn(
             "safety_flags": session["safety_flags"],
         })
 
+        if debug:
+            print(f"\n[DEBUG] Intent: {understand_out.intent.value}", file=sys.stderr)
+            print(
+                f"[DEBUG] Affect: distress={affect_out.distress}, urgency={affect_out.urgency}, "
+                f"self_harm={affect_out.crisis_self_harm}, violence={affect_out.crisis_violence_or_abuse}, "
+                f"detention={affect_out.crisis_detention}",
+                file=sys.stderr,
+            )
+            print(f"[DEBUG] Safety: triggered={safety_decision.triggered}, category={safety_decision.category}", file=sys.stderr)
+
         reply_text = safety_decision.reply_text or ""
         # The talker is NOT called
         if stream:
@@ -154,19 +178,84 @@ async def handle_turn(
             await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
             return reply_text, safety_decision
 
-    # 7. Normal Turn Branch
-    # If safety was previously shown, inject a system note to check in gently and not repeat it
-    system_notes = ""
-    if session.get("safety_flags"):
-        system_notes = "A safety message was already shown. Check in gently and do not repeat it."
+    # 6. Find gaps using FAST_MODEL
+    gap_analysis = await find_gaps(session=session, case=updated_case, llm=client)
 
+    # 7. Check readiness in pure code
+    user_wants_now = understand_out.wants_answer_now or (understand_out.intent == Intent.wants_answer_now)
+    ready, ready_reason = is_ready(
+        case=updated_case,
+        gap_analysis=gap_analysis,
+        wants_answer_now=user_wants_now,
+        turn_count=turn_num,
+        settings=settings,
+        session=session,
+    )
+
+    # Print debug diagnostics
+    if debug:
+        print(f"\n[DEBUG] Intent: {understand_out.intent.value}", file=sys.stderr)
+        print(
+            f"[DEBUG] Affect: distress={affect_out.distress}, urgency={affect_out.urgency}, "
+            f"anger={affect_out.anger}, confusion={affect_out.confusion}, "
+            f"self_harm={affect_out.crisis_self_harm}, violence={affect_out.crisis_violence_or_abuse}, "
+            f"detention={affect_out.crisis_detention}",
+            file=sys.stderr,
+        )
+        gaps_desc = ", ".join(f"{g.topic} ({g.impact})" for g in gap_analysis.gaps) if gap_analysis.gaps else "none"
+        print(f"[DEBUG] Gaps: {gaps_desc}", file=sys.stderr)
+        print(f"[DEBUG] Readiness: ready={ready}, reason='{ready_reason}'", file=sys.stderr)
+
+    # Keep session['case_file'] synchronized in case is_ready added assumptions
+    session["case_file"] = updated_case.model_dump()
+
+    # If ready, transition state to CONFIRMING and return READY_FOR_CONFIRMATION
+    if ready:
+        session["status"] = "CONFIRMING"
+        await update_session(session_id=session_id, updates={
+            "status": "CONFIRMING",
+            "case_file": session["case_file"],
+            "case_version": session["case_version"],
+            "turn_count": turn_num,
+            "asked_counts": session.get("asked_counts", {}),
+        })
+        return ReadyConfirmation("READY_FOR_CONFIRMATION", safety_decision)
+
+    # 8. Otherwise the talker writes the reply
+    # Select top gaps to ask and track their asked counts
+    to_ask = filter_gaps_to_ask(
+        session=session,
+        case=updated_case,
+        gaps=gap_analysis.gaps,
+        max_questions=settings.max_questions_per_turn,
+    )
+    for g in to_ask:
+        track_asked_gap(session, g.topic)
+
+    # Sync case_file again in case filter_gaps_to_ask added assumptions
+    session["case_file"] = updated_case.model_dump()
+
+    notes_list: list[str] = []
+    if session.get("safety_flags"):
+        notes_list.append("A safety message was already shown. Check in gently and do not repeat it.")
+
+    # If the user wanted an answer right now but we can't proceed without hard core, explain why
+    if user_wants_now and (not updated_case.hard_core.jurisdiction or not updated_case.hard_core.user_goal):
+        notes_list.append(
+            "The user asked for an immediate answer, but we cannot proceed without their location/jurisdiction "
+            "and main goal. Explain in one sentence why these two are needed before we can give advice, then ask for them."
+        )
+
+    system_notes = " ".join(notes_list)
     style_hint = affect_to_style_hint(affect_out)
 
     await update_session(session_id=session_id, updates={
         "case_file": session["case_file"],
         "case_version": session["case_version"],
         "turn_count": turn_num,
+        "asked_counts": session.get("asked_counts", {}),
     })
+
 
     if stream:
         raw_stream = await build_talker_reply(
@@ -175,6 +264,7 @@ async def handle_turn(
             llm=client,
             stream=True,
             case_summary=render_case_summary(updated_case),
+            gaps=to_ask,
             language=preferred_lang,
             style_hint=style_hint,
             system_notes=system_notes,
@@ -187,9 +277,11 @@ async def handle_turn(
             llm=client,
             stream=False,
             case_summary=render_case_summary(updated_case),
+            gaps=to_ask,
             language=preferred_lang,
             style_hint=style_hint,
             system_notes=system_notes,
         )
         await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_out.model_dump())
         return full_text, safety_decision
+

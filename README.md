@@ -79,7 +79,7 @@ Update your `.env` file with:
 | `config/helplines.json` | Contains verified crisis, emergency, and support helpline telephone numbers. |
 | `prompts/understand.txt` | Prompt instructions for the fast model to extract facts and user intent. |
 | `prompts/affect.txt` | Prompt instructions for the fast model to detect user emotions and crisis flags. |
-| `prompts/gaps.txt` | Prompt instructions for the fast model to find missing facts in the case. |
+| `prompts/gap_analyzer.txt` | Prompt instructions for the senior lawyer persona to identify missing facts and gaps. |
 | `prompts/talker.txt` | Prompt instructions for the smart model to write warm, conversational replies. |
 | `prompts/confirm_summary.txt` | Prompt instructions for the smart model to summarize facts before confirmation. |
 | `prompts/rewriter.txt` | Prompt instructions for compiling confirmed facts into an external service query. |
@@ -90,17 +90,17 @@ Update your `.env` file with:
 | `src/config.py` | Reads and validates environment variables from `.env` using Pydantic settings. |
 | `src/llm.py` | Wrapper for LLM calls with automatic retry, latency logging, and validation error handling. |
 | `src/db.py` | Manages connection to MongoDB collections (sessions, messages, case versions, logs) and TTL indexes. |
-| `src/schemas.py` | Defines Pydantic data schemas for messages, case patches, affect readings, and logs. |
+| `src/schemas.py` | Defines Pydantic data schemas for messages, case patches, affect readings, gaps, and logs. |
 | `src/prompts.py` | Loads `.txt` files from `/prompts` and computes version hashes for audit logging. |
 | `src/messages.py` | Stores pre-approved, hard-coded safety, crisis, and fallback text messages. |
 | `src/case_ops.py` | Applies validated patches to the user case file and records immutable versions. |
 | `src/understand.py` | Implements the fast-tier call to extract case patches, intent, and language. |
 | `src/affect.py` | Implements the fast-tier emotion and crisis detector (affect signals influence tone only). |
 | `src/safety.py` | Code-based safety filter that immediately intercepts emergencies, self-harm, or abuse keywords. |
-| `src/gaps.py` | Discovers missing case elements to guide the conversation toward readiness. |
-| `src/readiness.py` | Rule-based code check that decides when sufficient facts exist to move to confirmation. |
-| `src/talker.py` | Streams the conversational assistant response using the smart LLM tier. |
-| `src/pipeline.py` | Coordinates the per-turn pipeline steps (safety -> understand + affect -> patch -> gaps -> readiness -> talker). |
+| `src/gaps.py` | Discovers missing case elements (gaps) to guide the conversation toward readiness. |
+| `src/readiness.py` | Pure code evaluation of case readiness, gap tracking, and assumption recording. |
+| `src/talker.py` | Streams conversational replies with numbered gap blocks using the smart LLM tier. |
+| `src/pipeline.py` | Coordinates per-turn pipeline steps (safety -> understand + affect -> patch -> gaps -> readiness -> talker). |
 | `src/confirm.py` | Handles presenting case recap to the user and capturing their confirmation or correction. |
 | `src/service_client.py` | Sends the confirmed query to the external legal answering service (or local mock service). |
 | `src/presenter.py` | Formats and delivers the legal service's answer to the user in their chosen mode. |
@@ -120,3 +120,7 @@ Update your `.env` file with:
 | `tests/test_affect.py` | Tests for affect readings and style hint derivation rules. |
 | `tests/test_safety.py` | Over 55-sentence benchmark tests for keyword safety, false positive resistance, and priority order. |
 | `tests/test_pipeline.py` | Pipeline integration tests verifying parallel execution, crisis escalation, and subsequent turn warnings. |
+| `tests/test_gaps.py` | Tests for gap analyzer prompt execution and pending service gap injection. |
+| `tests/test_readiness.py` | Tests for readiness truth table, hard core constraints, and asked_counts logic. |
+| `tests/test_tenancy_simulation.py` | Multi-turn tenancy dispute conversation reaching READY_FOR_CONFIRMATION within 4-8 turns. |
+

@@ -236,3 +236,37 @@ class SafetyDecision(BaseModel):
     reply_text: str | None = None
     source: str | None = None  # "keywords" or "affect"
 
+
+class Gap(BaseModel):
+    """Represents a missing piece of information needed to advise on the case."""
+    topic: str
+    question_hint: str
+    why_it_matters: str
+    impact: str = "medium"  # "high" | "medium" | "low"
+    example_answer: str = ""
+    can_skip: bool = False
+
+    @field_validator("impact", mode="before")
+    @classmethod
+    def normalize_impact(cls, v: Any) -> str:
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower in ("high", "medium", "low"):
+                return v_lower
+        return "medium"
+
+
+class GapAnalysis(BaseModel):
+    """Output schema for the 'gap_analyzer' LLM step."""
+    gaps: list[Gap] = Field(default_factory=list, max_length=3)
+    legal_area_guess: str | None = None
+    blocking_for_service: bool = False
+
+    @field_validator("gaps", mode="before")
+    @classmethod
+    def limit_gaps(cls, v: Any) -> Any:
+        if isinstance(v, list) and len(v) > 3:
+            return v[:3]
+        return v
+
+

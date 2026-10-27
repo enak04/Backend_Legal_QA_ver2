@@ -136,7 +136,7 @@ async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
 
         try:
             print("\nAssistant: ", end="", flush=True)
-            stream_gen, decision = await handle_turn(
+            reply, decision = await handle_turn(
                 session=session,
                 user_message=user_input,
                 llm=llm_client,
@@ -144,9 +144,15 @@ async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
                 debug=debug,
             )
 
-            async for chunk in stream_gen:
-                print(chunk, end="", flush=True)
-            print("\n")
+            if reply == "READY_FOR_CONFIRMATION":
+                print("[READY_FOR_CONFIRMATION: We have collected enough details. Ready to confirm facts with user.]\n")
+            elif hasattr(reply, "__aiter__"):
+                async for chunk in reply:
+                    print(chunk, end="", flush=True)
+                print("\n")
+            else:
+                print(str(reply) + "\n")
+
 
         except Exception as e:
             if debug:

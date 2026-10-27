@@ -16,11 +16,14 @@ import asyncio
 from datetime import datetime, timezone
 import sys
 
+from src.case_ops import apply_patch, render_case_summary
 from src.config import get_settings
-from src.db import add_message, create_session, get_recent_messages, get_session, update_session
+from src.db import add_message, create_session, get_recent_messages, get_session, save_case_version, update_session
 from src.llm import FakeLLM, LLM
 from src.messages import CONSENT_PROMPT, DISCLAIMER, GENERIC_ERROR_REPLY, PRIVACY_NOTICE, WELCOME
+from src.schemas import CaseFile
 from src.talker import build_talker_reply
+from src.understand import understand
 
 
 async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
@@ -30,8 +33,17 @@ async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
     if settings.provider == "fake" or not settings.llm_api_key:
         if debug:
             print("[DEBUG] Using FakeLLM (provider is 'fake' or no LLM_API_KEY set)")
+        from src.schemas import CasePatch, Intent, NewFact, UnderstandOutput
         llm_client = FakeLLM(responses={
-            "talker": "I hear you, and I am here to help you outline what happened. Could you please share a little more detail about the main issue you are facing?"
+            "extractor": UnderstandOutput(
+                intent=Intent.provides_info,
+                language="English",
+                patch=CasePatch(
+                    add_facts=[NewFact(text="User shared initial context.", source="inferred", confidence=0.8)]
+                ),
+                change_summary="Recorded initial details",
+            ),
+            "talker": "I hear you, and I am here to help you outline what happened. Could you please share a little more detail about the main issue you are facing?",
         })
     else:
         if debug:
@@ -116,17 +128,62 @@ async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
         # Save user message to database
         await add_message(session_id=session_id, role="user", text=user_input)
 
-        # Retrieve recent messages for talker context
+        # Retrieve recent messages for context
         recent_messages = await get_recent_messages(session_id=session_id, n=settings.history_window)
 
-        print("\nAssistant: ", end="", flush=True)
-
         try:
+            # 1. Understand user message and extract case patch
+            understand_out = await understand(
+                session=session,
+                new_message=user_input,
+                llm=llm_client,
+                recent_messages=recent_messages,
+            )
+
+            # 2. Apply patch to case file
+            turn_num = session.get("turn_count", 0) + 1
+            raw_case = session.get("case_file", {})
+            case_obj = CaseFile.model_validate(raw_case) if raw_case else CaseFile()
+            updated_case, change_report = apply_patch(
+                case=case_obj,
+                patch=understand_out.patch,
+                user_message=user_input,
+                turn=turn_num,
+            )
+
+            # 3. Save immutable case version
+            await save_case_version(
+                session_id=session_id,
+                version=updated_case.version,
+                patch=understand_out.patch.model_dump(),
+                full_case=updated_case.model_dump(),
+            )
+
+            # 4. Update session state
+            session["case_file"] = updated_case.model_dump()
+            session["case_version"] = updated_case.version
+            session["turn_count"] = turn_num
+            await update_session(session_id=session_id, updates={
+                "case_file": session["case_file"],
+                "case_version": session["case_version"],
+                "turn_count": turn_num,
+            })
+
+            # Debug inspection
+            if debug:
+                print(f"\n[DEBUG] Intent: {understand_out.intent.value}")
+                print(f"[DEBUG] Patch: {understand_out.patch.model_dump_json(indent=2)}")
+                print(f"[DEBUG] Case Summary:\n{render_case_summary(updated_case)}\n")
+
+            # 5. Build and stream talker reply
+            print("\nAssistant: ", end="", flush=True)
             stream_gen = await build_talker_reply(
                 session=session,
                 messages=recent_messages,
                 llm=llm_client,
                 stream=True,
+                case_summary=render_case_summary(updated_case),
+                language=updated_case.hard_core.language,
             )
 
             collected_chunks: list[str] = []
@@ -139,11 +196,6 @@ async def run_chat(resume_id: str | None = None, debug: bool = False) -> None:
 
             # Save assistant message to database
             await add_message(session_id=session_id, role="assistant", text=assistant_reply)
-
-            # Increment turn count
-            current_turns = session.get("turn_count", 0) + 1
-            session["turn_count"] = current_turns
-            await update_session(session_id=session_id, updates={"turn_count": current_turns})
 
         except Exception as e:
             if debug:

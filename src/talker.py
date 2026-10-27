@@ -42,6 +42,8 @@ async def build_talker_reply(
     messages: list[dict],
     llm: BaseLLM | None = None,
     stream: bool = False,
+    case_summary: str | None = None,
+    language: str | None = None,
 ) -> str | AsyncGenerator[str, None]:
     """
     Loads and renders the talker prompt template, formats conversation history,
@@ -53,13 +55,17 @@ async def build_talker_reply(
     settings = get_settings()
     client = llm or LLM()
 
+    # Determine summary and language
+    summary_text = case_summary or "(nothing yet)"
+    lang_text = language or session.get("language", "en")
+
     # Load and render talker system prompt template
     template_text, _ = load_prompt("talker")
     rendered_system = render(
         template_text,
         phase=session.get("status", "COLLECTING"),
-        language=session.get("language", "en"),
-        case_summary="(nothing yet)",
+        language=lang_text,
+        case_summary=summary_text,
         gaps="Find out what happened and what they want help with",
         style_hint="unknown",
         system_notes="",

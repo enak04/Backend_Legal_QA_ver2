@@ -85,6 +85,7 @@ Update your `.env` file with:
 | `prompts/rewriter.txt` | Prompt instructions for compiling confirmed facts into an external service query. |
 | `prompts/presenter.txt` | Prompt instructions for presenting legal answers in actionable, readable, or informative modes. |
 | `prompts/faithfulness.txt` | Prompt instructions for checking that the chatbot's explanation matches the legal service answer. |
+| `prompts/extractor.txt` | Prompt instructions for the extractor LLM to output intent and structured case patches. |
 | `src/__init__.py` | Marks `src` as an importable Python package. |
 | `src/config.py` | Reads and validates environment variables from `.env` using Pydantic settings. |
 | `src/llm.py` | Wrapper for LLM calls with automatic retry, latency logging, and validation error handling. |
@@ -114,3 +115,5 @@ Update your `.env` file with:
 | `tests/test_llm.py` | Tests for FakeLLM, Pydantic validation, and streaming. |
 | `tests/test_prompts.py` | Tests for prompt loading, hash computation, and variable rendering. |
 | `tests/test_talker.py` | Tests for talker prompt assembly and `<user_message>` tag wrapping. |
+| `tests/test_case_ops.py` | Tests for case operations, patch application, deduplication, and anti-hallucination downgrading. |
+| `tests/test_understand.py` | Tests for the understand step using extractor prompt and FakeLLM. |

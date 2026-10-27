@@ -1,0 +1,44 @@
+{
+  "id": "02_vague_business_owner",
+  "name": "David Martinez",
+  "description": "Overworked small catering business owner in Chicago with several unpaid client invoices.",
+  "language": "en",
+  "style": "distracted, rushed, gives vague answers until prompted for specific numbers",
+  "length": "short",
+  "quirks": [
+    "Says 'you know how it is' often",
+    "Initially forgets the exact invoice amount, then remembers it was $6,500",
+    "Mentions other catering gigs that have nothing to do with the claim"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Illinois",
+    "goal": "Collect $6,500 in unpaid catering fees from corporate client",
+    "facts": [
+      "Provided catering services for corporate wedding on August 15",
+      "Client paid 50% deposit ($6,500) but refused to pay remaining $6,500 balance",
+      "Client claims dessert was served 30 minutes late"
+    ],
+    "timeline": [
+      "July 1: Catering contract signed with 50% deposit",
+      "August 15: Event catered successfully",
+      "Sept 1: Final invoice sent, payment overdue by 60 days"
+    ],
+    "people": [
+      "Debtor: Blue Horizon Marketing Inc.",
+      "Contact person: Karen Smith (Event Coordinator)"
+    ],
+    "documents": [
+      "Signed catering contract for $13,000",
+      "Unpaid invoice for $6,500 balance",
+      "Email correspondence demanding payment"
+    ],
+    "deadlines": [],
+    "urgency": "medium"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

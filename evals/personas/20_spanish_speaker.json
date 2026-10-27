@@ -1,0 +1,43 @@
+{
+  "id": "20_spanish_speaker",
+  "name": "Carmen Delgado",
+  "description": "Spanish-speaking mother in Texas whose landlord withheld her $1,200 security deposit unfairly.",
+  "language": "es",
+  "style": "warm, respectful Spanish, worried about money",
+  "length": "medium",
+  "quirks": [
+    "Writes entirely in Spanish ('Mi casero no me devuelve el depósito')",
+    "Very polite ('Muchas gracias por su ayuda, señorita/señor')",
+    "Needs reply strictly in Spanish"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Texas",
+    "goal": "Recuperar el depósito de garantía de $1,200 y carta de demanda (Recover security deposit)",
+    "facts": [
+      "Vivió 2 años en un apartamento en Houston, Texas",
+      "Se mudó el 15 de septiembre dejando el apartamento limpio",
+      "El propietario no ha devuelto el depósito de $1,200 ni entregó lista de deducciones en 30 días"
+    ],
+    "timeline": [
+      "15 de septiembre: Desalojo voluntario y entrega de llaves",
+      "15 de octubre: Vencieron los 30 días legales que tiene el arrendador en Texas"
+    ],
+    "people": [
+      "Inquilina: Carmen Delgado",
+      "Propietario: Houston Rental Properties LLC"
+    ],
+    "documents": [
+      "Contrato de arrendamiento con depósito de $1,200",
+      "Fotos del apartamento limpio el día de la mudanza",
+      "Comprobante de entrega de nueva dirección por escrito"
+    ],
+    "deadlines": [],
+    "urgency": "medium"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

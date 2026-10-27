@@ -1,0 +1,43 @@
+{
+  "id": "11_contradictory_user",
+  "name": "Brian Walsh",
+  "description": "Car owner in Massachusetts in a repair shop dispute who contradicts dates and amounts before correcting.",
+  "language": "en",
+  "style": "hasty, self-correcting, apologetic",
+  "length": "medium",
+  "quirks": [
+    "First says the repair cost was $3,000, then corrects to $1,800",
+    "First says he signed an estimate, then remembers it was verbal over phone",
+    "Grateful when the bot catches discrepancies"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Massachusetts",
+    "goal": "Dispute unauthorized $1,800 transmission repair charges",
+    "facts": [
+      "Took 2018 Honda Civic to local garage for $150 oil change and brake inspection",
+      "Mechanic performed $1,800 transmission rebuild without written authorization",
+      "Shop is holding car and refusing to release it until $1,800 is paid"
+    ],
+    "timeline": [
+      "Oct 15: Dropped car off with verbal agreement for inspection only",
+      "Oct 18: Garage called stating work was done and bill is $1,800",
+      "Today: Shop holding vehicle"
+    ],
+    "people": [
+      "Car owner: Brian Walsh",
+      "Auto repair shop: Bay State Auto Service"
+    ],
+    "documents": [
+      "Initial service drop-off ticket with no transmission repair authorization",
+      "Final disputed invoice of $1,800"
+    ],
+    "deadlines": [],
+    "urgency": "high"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

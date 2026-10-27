@@ -13,3 +13,6 @@ evals/results/
 
 # Local database fallback data
 .mongo_dev_data.json
+
+# Scratch workspace scripts
+scratch/

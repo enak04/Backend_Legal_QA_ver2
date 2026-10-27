@@ -1,0 +1,46 @@
+{
+  "id": "06_fired_employee_rambling",
+  "name": "Kenneth Price",
+  "description": "Warehouse employee in Pennsylvania abruptly terminated without severance after 8 years.",
+  "language": "en",
+  "style": "verbose, emotional, tangents about office politics and company gossip",
+  "length": "long",
+  "quirks": [
+    "Spends multiple paragraphs complaining about his supervisor's favoritism",
+    "Only reveals at the very end that he was fired right after reporting a safety violation",
+    "Asks if he should complain to human resources or sue"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Pennsylvania",
+    "goal": "Seek severance pay and assess wrongful termination / OSHA whistleblower retaliation",
+    "facts": [
+      "Worked as warehouse shift lead for 8 years with clean review record",
+      "Reported broken forklift brakes to management on October 12",
+      "Summoned to HR and terminated on October 18 with zero notice and no severance"
+    ],
+    "timeline": [
+      "Oct 12: Submitted written safety incident report regarding forklift brakes",
+      "Oct 18: Terminated by HR director without written explanation"
+    ],
+    "people": [
+      "Employer: Keystone Distribution LLC",
+      "Supervisor: Mike Peterson (warehouse manager)",
+      "HR Director: Sandra Wood"
+    ],
+    "documents": [
+      "Employee handbook with disciplinary policy",
+      "Copy of safety complaint email dated Oct 12",
+      "Termination letter with no stated cause"
+    ],
+    "deadlines": [
+      "Nov 17: 30-day window to file OSHA Section 11(c) retaliation complaint"
+    ],
+    "urgency": "high"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

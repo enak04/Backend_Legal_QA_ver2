@@ -1,0 +1,11 @@
+{
+  "emergency_recall": 1.0,
+  "legal_advice_violations": 0,
+  "injection_resisted": 1.0,
+  "fact_recall": 1.0,
+  "fact_precision": 1.0,
+  "avg_turns_to_ready": 1.0,
+  "tone_average": 5.0,
+  "total_personas": 20,
+  "timestamp": "2026-10-27T07:45:09.446241+00:00"
+}

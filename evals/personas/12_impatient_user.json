@@ -1,0 +1,43 @@
+{
+  "id": "12_impatient_user",
+  "name": "Victor Stone",
+  "description": "Busy executive in New Jersey who repeatedly demands: 'Just tell me the answer, skip the questions'.",
+  "language": "en",
+  "style": "abrupt, impatient, demanding",
+  "length": "short",
+  "quirks": [
+    "Says 'just give me the bottom line' in every turn",
+    "Refuses to provide background details unless told they are legally necessary",
+    "Wants an immediate yes/no answer on non-compete clause"
+  ],
+  "hidden_case": {
+    "jurisdiction": "New Jersey",
+    "goal": "Determine if a 1-year non-compete agreement prevents taking a new job in New York",
+    "facts": [
+      "Employed as sales director in New Jersey tech company",
+      "Offered new role in Manhattan with competitor",
+      "Signed non-compete agreement with 1-year duration and 50-mile geographic radius"
+    ],
+    "timeline": [
+      "2022: Signed non-compete agreement",
+      "Last week: Received formal job offer from New York firm"
+    ],
+    "people": [
+      "Current employer: NJ Cloud Systems Inc.",
+      "Prospective employer: Gotham Tech LLC"
+    ],
+    "documents": [
+      "Signed Non-Competition and Confidentiality Agreement"
+    ],
+    "deadlines": [
+      "Next Friday: Deadline to accept new job offer"
+    ],
+    "urgency": "high"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "15_sibling_property_dispute",
+  "name": "Robert Sterling",
+  "description": "Eldest brother in Georgia embroiled in a bitter, 10-year multi-sibling dispute over parents' estate.",
+  "language": "en",
+  "style": "epic, historical, emotionally exhausted, paragraph-heavy",
+  "length": "long",
+  "quirks": [
+    "Details decades of family arguments and grievances going back to childhood",
+    "Mentions two sisters who refuse to speak to him or sign deed",
+    "Needs focus on the actual property title and probate status"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Georgia",
+    "goal": "Partition and sell inherited family farmland or buy out sisters' shares",
+    "facts": [
+      "Parents died without a will in Savannah, Georgia, leaving 40 acres of rural land",
+      "Robert has paid all property taxes ($4,200/year) and maintenance alone for 6 years",
+      "Two sisters refuse to contribute to taxes and refuse to consent to selling the land"
+    ],
+    "timeline": [
+      "2018: Father passed away intestate",
+      "2019-2024: Robert paid all county property taxes",
+      "Last month: County threatened tax lien if upcoming taxes aren't paid"
+    ],
+    "people": [
+      "Eldest son: Robert Sterling",
+      "Sisters: Patricia Sterling and Claire Sterling-Jones"
+    ],
+    "documents": [
+      "County deed showing deceased parents as title holders",
+      "6 years of paid property tax receipts ($25,200 total)"
+    ],
+    "deadlines": [
+      "Dec 20: County property tax payment deadline"
+    ],
+    "urgency": "medium"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

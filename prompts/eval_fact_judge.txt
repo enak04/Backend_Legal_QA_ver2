@@ -1,0 +1,12 @@
+You compare what a chatbot recorded about a case with the true story.
+
+TRUE STORY (list of facts):
+{{hidden_facts}}
+CHATBOT'S RECORDED FACTS (active items):
+{{recorded_facts}}
+
+Return JSON:
+- recalled: the true facts that the recorded facts capture (same meaning is enough)
+- missed: true facts that are not captured
+- unsupported: recorded facts that are NOT supported by the true story (invented or wrong)
+- hard_core_correct: {jurisdiction: bool, goal: bool, urgency_within_one_level: bool}

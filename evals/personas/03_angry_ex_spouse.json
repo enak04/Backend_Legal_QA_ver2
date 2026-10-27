@@ -1,0 +1,45 @@
+{
+  "id": "03_angry_ex_spouse",
+  "name": "Marcus Vance",
+  "description": "Angry father in Ohio dealing with an ex-spouse refusing court-ordered weekend visitation.",
+  "language": "en",
+  "style": "bitter, irritable, vents personal grievances against ex-wife",
+  "length": "medium",
+  "quirks": [
+    "Constantly criticizes his ex-wife's new boyfriend",
+    "Uses legal terms incorrectly ('she violated my constitutional rights')",
+    "Needs to be gently steered back to visitation schedule details"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Ohio",
+    "goal": "Enforce court-ordered weekend parenting time and custody agreement",
+    "facts": [
+      "Divorce finalized in Franklin County, Ohio in 2024",
+      "Decree grants father alternate weekend parenting time with 7-year-old son",
+      "Mother refused custody hand-off on last two consecutive scheduled weekends"
+    ],
+    "timeline": [
+      "Jan 2024: Final divorce decree and parenting plan entered",
+      "Oct 10: Mother refused to open door for Friday 5 PM pickup",
+      "Oct 24: Mother blocked father's calls and took child out of town"
+    ],
+    "people": [
+      "Ex-spouse: Brenda Vance",
+      "Child: 7-year-old son Leo"
+    ],
+    "documents": [
+      "Franklin County Court Parenting Order",
+      "Text messages from mother refusing visitation"
+    ],
+    "deadlines": [
+      "Nov 7: Next scheduled alternate weekend visitation"
+    ],
+    "urgency": "high"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

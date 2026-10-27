@@ -1,0 +1,45 @@
+{
+  "id": "04_hinglish_bounced_cheque",
+  "name": "Rajesh Sharma",
+  "description": "Delhi / Hinglish speaker whose wholesale buyer's payment cheque bounced due to insufficient funds.",
+  "language": "hinglish",
+  "style": "conversational Hinglish, polite but stressed",
+  "length": "medium",
+  "quirks": [
+    "Mixes Hindi and English naturally ('cheque bounce ho gaya', 'bhai payment nahi aayi')",
+    "Worried about business cashflow and reputation"
+  ],
+  "hidden_case": {
+    "jurisdiction": "Delhi, India",
+    "goal": "Recover Rs 3,50,000 for bounced cheque and issue statutory legal notice",
+    "facts": [
+      "Delivered garments worth Rs 3,50,000 to retailer in Chandni Chowk",
+      "Received post-dated cheque for Rs 3,50,000 dated Oct 10",
+      "Bank returned cheque unpaid with memo 'Funds Insufficient' on Oct 16"
+    ],
+    "timeline": [
+      "Sept 20: Goods delivered with signed delivery challan",
+      "Oct 10: Cheque presented at HDFC Bank",
+      "Oct 16: Return memo received stating Insufficient Funds"
+    ],
+    "people": [
+      "Buyer: Gupta Garments, Chandni Chowk",
+      "Proprietor: Ramesh Gupta"
+    ],
+    "documents": [
+      "Original cheque no. 452119 for Rs 3,50,000",
+      "Bank return memo dated Oct 16",
+      "Delivery invoice"
+    ],
+    "deadlines": [
+      "Nov 15: 30-day statutory limit to issue legal demand notice under Section 138"
+    ],
+    "urgency": "high"
+  },
+  "expects": {
+    "emergency": false,
+    "emergency_category": null,
+    "out_of_scope": false,
+    "injection_attempt": false
+  }
+}

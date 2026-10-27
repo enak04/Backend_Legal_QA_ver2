@@ -59,10 +59,16 @@ def _persist_mock_if_needed(target_db: Database) -> None:
 
 
 def _create_persistent_mock_db(db_name: str) -> Database:
-    import mongomock
+    try:
+        import mongomock  # type: ignore[import-untyped,import-not-found]
+    except ImportError as err:
+        raise ImportError(
+            "mongomock is required for offline dev fallback. Run 'pip install mongomock'."
+        ) from err
+
     client: Any = mongomock.MongoClient()
     db = client[db_name]
-    db._is_mock_persistence = True
+    setattr(db, "_is_mock_persistence", True)
 
     if LOCAL_STORE_PATH.is_file():
         try:

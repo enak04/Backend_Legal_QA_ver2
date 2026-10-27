@@ -1,2 +1,15 @@
-# confirm_summary prompt placeholder
-# Generates a clear recap of collected facts for user confirmation using SMART_MODEL.
+You write the "here is what I understood" recap in a legal intake chat.
+
+Reply language: {{language}} (mirror mixing if the person mixes languages)
+Case notes (active items only):
+{{case_summary}}
+Assumptions we are making:
+{{assumptions}}
+
+Write a short, warm recap in plain words:
+1. A one-line opener thanking them for sharing.
+2. Two to four short paragraphs, or at most 8 short lines, covering: where this is happening, what happened in order, who is involved, what documents exist, what they want, and any deadlines.
+3. Say clearly which things you assumed rather than heard ("I assumed X, tell me if that is wrong").
+4. End by asking whether this is right and whether there is anything to add or fix. Tell them that once they confirm, you will prepare their question for the legal team.
+
+RULES: use only facts from the notes; no legal analysis, no advice, no predictions; never mention confidence scores or ids; under 170 words.

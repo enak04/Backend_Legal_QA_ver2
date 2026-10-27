@@ -123,4 +123,5 @@ Update your `.env` file with:
 | `tests/test_gaps.py` | Tests for gap analyzer prompt execution and pending service gap injection. |
 | `tests/test_readiness.py` | Tests for readiness truth table, hard core constraints, and asked_counts logic. |
 | `tests/test_tenancy_simulation.py` | Multi-turn tenancy dispute conversation reaching READY_FOR_CONFIRMATION within 4-8 turns. |
+| `tests/test_confirm_service_presenter.py` | Tests for confirmation, service call, presenter guards, faithfulness checks, and state transitions. |
 

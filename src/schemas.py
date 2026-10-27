@@ -270,3 +270,58 @@ class GapAnalysis(BaseModel):
         return v
 
 
+class ServiceQueryFact(BaseModel):
+    """Fact representation for external service query."""
+    text: str
+    certainty: str = "stated"  # "stated" | "uncertain" | "assumed"
+
+
+class ServiceQuery(BaseModel):
+    """Compiled self-contained query sent to the external legal answering service."""
+    query_text: str = ""
+    jurisdiction: str | None = None
+    legal_area: str | None = None
+    user_goal: str | None = None
+    urgency: dict[str, Any] = Field(default_factory=lambda: {"level": "unknown", "reason": ""})
+    facts: list[ServiceQueryFact] = Field(default_factory=list)
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
+    parties: list[dict[str, Any]] = Field(default_factory=list)
+    documents: list[dict[str, Any]] = Field(default_factory=list)
+    deadlines: list[dict[str, Any]] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    questions_to_answer: list[str] = Field(default_factory=list)
+    user_language: str = "English"
+
+    @field_validator("facts", mode="before")
+    @classmethod
+    def normalize_facts(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            res = []
+            for item in v:
+                if isinstance(item, dict):
+                    res.append(ServiceQueryFact(**item))
+                elif isinstance(item, ServiceQueryFact):
+                    res.append(item)
+                elif isinstance(item, str):
+                    res.append(ServiceQueryFact(text=item, certainty="stated"))
+            return res
+        return v
+
+
+class ServiceResponse(BaseModel):
+    """Response returned from the external legal answering service."""
+    status: str = "answered"  # "answered" | "needs_more_info" | "error"
+    answer: str | None = None
+    sections: dict[str, str] | None = None  # e.g. summary, next_steps, caveats
+    missing_info: list[str] = Field(default_factory=list)
+    citations: list[str] = Field(default_factory=list)
+
+
+class FaithfulnessReport(BaseModel):
+    """Result of faithfulness validation checking presenter text against source answer."""
+    unsupported_claims: list[str] = Field(default_factory=list)
+    omitted_critical: list[str] = Field(default_factory=list)
+    ok: bool = True
+
+
+

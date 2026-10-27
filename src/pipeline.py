@@ -1,15 +1,19 @@
 """
 src/pipeline.py - Orchestrates the per-turn intake processing pipeline.
 
-Per-turn pipeline steps (ARCHITECTURE.md / COLLECTING state):
-1. Save the user message to database.
-2. Safety pre-check (keywords in code).
-3. In parallel (asyncio.gather): understand (extract case patch + intent) and affect (emotion + crisis flags).
-4. Apply the patch in code, validate, and save a new case version.
-5. Safety decision: keyword hit OR affect crisis flags -> hard-coded message (case still gets updated, talker NOT called).
-6. On next normal turn, if safety was previously shown, pass a system_notes line to talker.
-7. Otherwise call talker with style_hint derived from affect_to_style_hint.
-8. Save the assistant message with affect data.
+State Machine (ARCHITECTURE.md):
+COLLECTING -> CONFIRMING -> ANSWERED
+- COLLECTING: Gathers facts. When ready, generates recap (SMART) and moves to CONFIRMING.
+- CONFIRMING: Recap shown.
+  * User confirms: builds ServiceQuery (SMART), calls service.
+    - status 'answered' -> present (SMART + guard), status ANSWERED.
+    - status 'needs_more_info' -> set pending_service_gaps, status COLLECTING.
+    - status 'error' -> honest error message, keep query, allow retry.
+  * User corrects/provides info -> applies patch, status COLLECTING, continues intake.
+- ANSWERED: Answer presented.
+  * New case facts -> applies patch, status CONFIRMING, updated recap.
+  * Question about answer -> present in followup mode using stored answer only.
+Safety checks run in EVERY state before normal handling.
 """
 
 import asyncio
@@ -20,20 +24,23 @@ from typing import Any
 from src.affect import affect_to_style_hint, read_affect
 from src.case_ops import apply_patch, render_case_summary
 from src.config import get_settings
+from src.confirm import build_service_query, make_recap
 from src.db import add_message, get_recent_messages, save_case_version, update_session
 from src.gaps import find_gaps
 from src.llm import BaseLLM, LLM
+from src.presenter import present
 from src.readiness import filter_gaps_to_ask, is_ready, track_asked_gap
 from src.safety import decide, detect_keywords
-from src.schemas import AffectReading, CaseFile, Intent, SafetyDecision
+from src.schemas import AffectReading, CaseFile, Intent, SafetyDecision, ServiceResponse
+from src.service_client import ServiceClient
 from src.talker import build_talker_reply
 from src.understand import understand
 
 
 class ReadyConfirmation(str):
     """
-    String equal to 'READY_FOR_CONFIRMATION' that also supports unpacking
-    as a 2-tuple: (reply, safety_decision).
+    String representing confirmation recap, which also equals 'READY_FOR_CONFIRMATION'
+    for test assertions, and unpacks as (reply, safety_decision).
     """
     decision: SafetyDecision
 
@@ -41,6 +48,11 @@ class ReadyConfirmation(str):
         obj = super().__new__(cls, text)
         obj.decision = decision or SafetyDecision()
         return obj
+
+    def __eq__(self, other: Any) -> bool:
+        if other == "READY_FOR_CONFIRMATION":
+            return True
+        return super().__eq__(other)
 
     def __iter__(self):
         yield str(self)
@@ -71,35 +83,27 @@ async def handle_turn(
     session: dict,
     user_message: str,
     llm: BaseLLM | None = None,
+    service_client: ServiceClient | None = None,
     stream: bool = False,
     debug: bool = False,
 ) -> tuple[str | AsyncGenerator[str, None], SafetyDecision]:
     """
-    Executes one complete conversational turn according to the COLLECTING pipeline:
-    1. Save user message to database
-    2. Safety pre-check on keywords (pure code)
-    3. In parallel (asyncio.gather): understand and affect
-    4. Apply patch in code, validate, and save new case version
-    5. Safety decision: keyword hit OR affect crisis flags
-    6. Find gaps (FAST_MODEL)
-    7. Check readiness (pure code)
-       If ready: set session status to CONFIRMING and return 'READY_FOR_CONFIRMATION'
-    8. Otherwise talker writes the reply (SMART_MODEL)
+    Executes one complete conversational turn according to the state machine:
+    COLLECTING -> CONFIRMING -> ANSWERED.
     """
     settings = get_settings()
     client = llm or LLM()
+    srv_client = service_client or ServiceClient()
     session_id = session["_id"]
 
     # 1. Save user message to database
     await add_message(session_id=session_id, role="user", text=user_message)
-
-    # Retrieve recent messages for context
     recent_messages = await get_recent_messages(session_id=session_id, n=settings.history_window)
 
-    # 2. Safety pre-check on keywords (pure code)
+    # 2. Safety keyword pre-check (pure code)
     kw_category = detect_keywords(user_message)
 
-    # 3. In parallel (asyncio.gather): understand and affect
+    # 3. In parallel: understand and affect (FAST tier)
     understand_task = understand(
         session=session,
         new_message=user_message,
@@ -112,34 +116,16 @@ async def handle_turn(
         llm=client,
         recent_messages=recent_messages,
     )
-
     understand_out, affect_out = await asyncio.gather(understand_task, affect_task)
 
-    # 4. Apply patch in code, validate, and save new case version
+    # Reconstruct current case file
     turn_num = session.get("turn_count", 0) + 1
+    session["turn_count"] = turn_num
     raw_case = session.get("case_file", {})
     case_obj = CaseFile.model_validate(raw_case) if raw_case else CaseFile()
-    updated_case, change_report = apply_patch(
-        case=case_obj,
-        patch=understand_out.patch,
-        user_message=user_message,
-        turn=turn_num,
-    )
+    preferred_lang = case_obj.hard_core.language or affect_out.language or "English"
 
-    await save_case_version(
-        session_id=session_id,
-        version=updated_case.version,
-        patch=understand_out.patch.model_dump(),
-        full_case=updated_case.model_dump(),
-    )
-
-    # Update session state with case information
-    session["case_file"] = updated_case.model_dump()
-    session["case_version"] = updated_case.version
-    session["turn_count"] = turn_num
-
-    # 5. Safety decision: keyword hit OR affect crisis flags
-    preferred_lang = updated_case.hard_core.language or affect_out.language or "English"
+    # 4. Safety decision (runs in EVERY state)
     safety_decision = decide(
         message=user_message,
         affect=affect_out,
@@ -147,41 +133,271 @@ async def handle_turn(
     )
 
     if safety_decision.triggered:
-        # Record category in session safety flags (safety escalation is a flag, not a state)
         if "safety_flags" not in session or session["safety_flags"] is None:
             session["safety_flags"] = []
         if safety_decision.category not in session["safety_flags"]:
             session["safety_flags"].append(safety_decision.category)
 
         await update_session(session_id=session_id, updates={
-            "case_file": session["case_file"],
-            "case_version": session["case_version"],
+            "case_file": session.get("case_file", {}),
+            "case_version": session.get("case_version", 0),
             "turn_count": turn_num,
             "safety_flags": session["safety_flags"],
         })
 
         if debug:
-            print(f"\n[DEBUG] Intent: {understand_out.intent.value}", file=sys.stderr)
-            print(
-                f"[DEBUG] Affect: distress={affect_out.distress}, urgency={affect_out.urgency}, "
-                f"self_harm={affect_out.crisis_self_harm}, violence={affect_out.crisis_violence_or_abuse}, "
-                f"detention={affect_out.crisis_detention}",
-                file=sys.stderr,
-            )
-            print(f"[DEBUG] Safety: triggered={safety_decision.triggered}, category={safety_decision.category}", file=sys.stderr)
+            print(f"\n[DEBUG SAFETY] Triggered: {safety_decision.category}", file=sys.stderr)
 
         reply_text = safety_decision.reply_text or ""
-        # The talker is NOT called
         if stream:
             return _async_string_stream(reply_text, session_id=session_id, affect_dict=affect_out.model_dump()), safety_decision
         else:
             await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
             return reply_text, safety_decision
 
-    # 6. Find gaps using FAST_MODEL
+    # Current state dispatch
+    current_status = session.get("status", "COLLECTING")
+
+    if debug:
+        print(f"\n[DEBUG] State: {current_status} | Intent: {understand_out.intent.value}", file=sys.stderr)
+
+    # -----------------------------------------------------------------------
+    # STATE: CONFIRMING
+    # -----------------------------------------------------------------------
+    if current_status == "CONFIRMING":
+        # Check if intent is confirms
+        if understand_out.intent == Intent.confirms:
+            # Build ServiceQuery (SMART tier, with PII redaction)
+            query = await build_service_query(case=case_obj, llm=client, session=session)
+            session["last_service_query"] = query.model_dump()
+
+            # Call external legal answering service
+            service_resp = await srv_client.ask(query=query, session_id=session_id)
+
+            if service_resp.status == "answered":
+                session["last_service_answer"] = service_resp.model_dump()
+                session["status"] = "ANSWERED"
+                await update_session(session_id=session_id, updates={
+                    "status": "ANSWERED",
+                    "last_service_query": session["last_service_query"],
+                    "last_service_answer": session["last_service_answer"],
+                    "turn_count": turn_num,
+                })
+
+                # Present the answer (SMART tier + code guard + faithfulness)
+                presented_text = await present(
+                    session=session,
+                    service_response=service_resp,
+                    mode="initial",
+                    new_message=user_message,
+                    llm=client,
+                )
+                await add_message(session_id=session_id, role="assistant", text=presented_text, affect=affect_out.model_dump())
+                return presented_text, safety_decision
+
+            elif service_resp.status == "needs_more_info":
+                # External service needs more information -> move back to COLLECTING
+                session["pending_service_gaps"] = service_resp.missing_info
+                session["status"] = "COLLECTING"
+                await update_session(session_id=session_id, updates={
+                    "status": "COLLECTING",
+                    "pending_service_gaps": session["pending_service_gaps"],
+                    "turn_count": turn_num,
+                })
+
+                # Ask for the missing items naturally via talker
+                gap_analysis = await find_gaps(session=session, case=case_obj, llm=client)
+                to_ask = filter_gaps_to_ask(
+                    session=session,
+                    case=case_obj,
+                    gaps=gap_analysis.gaps,
+                    max_questions=settings.max_questions_per_turn,
+                )
+                for g in to_ask:
+                    track_asked_gap(session, g.topic)
+
+                talker_reply = await build_talker_reply(
+                    session=session,
+                    messages=recent_messages,
+                    llm=client,
+                    stream=False,
+                    case_summary=render_case_summary(case_obj),
+                    gaps=to_ask,
+                    language=preferred_lang,
+                    style_hint=affect_to_style_hint(affect_out),
+                    system_notes="The legal team asked for a few additional details before giving advice.",
+                )
+                await add_message(session_id=session_id, role="assistant", text=talker_reply, affect=affect_out.model_dump())
+                return talker_reply, safety_decision
+
+            else:  # service_resp.status == "error"
+                err_text = (
+                    "I apologize, but our legal answering service is currently unavailable or encountered an error. "
+                    "Your case details have been safely preserved. You can type 'retry' or send a message whenever you would like to try again."
+                )
+                await update_session(session_id=session_id, updates={
+                    "last_service_query": session["last_service_query"],
+                    "turn_count": turn_num,
+                })
+                await add_message(session_id=session_id, role="assistant", text=err_text, affect=affect_out.model_dump())
+                return err_text, safety_decision
+
+        else:
+            # User provided a correction or new details during CONFIRMING -> move to COLLECTING
+            updated_case, change_report = apply_patch(
+                case=case_obj,
+                patch=understand_out.patch,
+                user_message=user_message,
+                turn=turn_num,
+            )
+            await save_case_version(
+                session_id=session_id,
+                version=updated_case.version,
+                patch=understand_out.patch.model_dump(),
+                full_case=updated_case.model_dump(),
+            )
+            session["case_file"] = updated_case.model_dump()
+            session["case_version"] = updated_case.version
+            session["status"] = "COLLECTING"
+            await update_session(session_id=session_id, updates={
+                "status": "COLLECTING",
+                "case_file": session["case_file"],
+                "case_version": session["case_version"],
+                "turn_count": turn_num,
+            })
+
+            # Check gaps & readiness
+            gap_analysis = await find_gaps(session=session, case=updated_case, llm=client)
+            user_wants_now = understand_out.wants_answer_now or (understand_out.intent == Intent.wants_answer_now)
+            ready, ready_reason = is_ready(
+                case=updated_case,
+                gap_analysis=gap_analysis,
+                wants_answer_now=user_wants_now,
+                turn_count=turn_num,
+                settings=settings,
+                session=session,
+            )
+
+            if ready:
+                recap = await make_recap(session=session, case=updated_case, llm=client)
+                session["status"] = "CONFIRMING"
+                await update_session(session_id=session_id, updates={"status": "CONFIRMING"})
+                await add_message(session_id=session_id, role="assistant", text=recap, affect=affect_out.model_dump())
+                return ReadyConfirmation(recap, safety_decision)
+
+            to_ask = filter_gaps_to_ask(
+                session=session,
+                case=updated_case,
+                gaps=gap_analysis.gaps,
+                max_questions=settings.max_questions_per_turn,
+            )
+            for g in to_ask:
+                track_asked_gap(session, g.topic)
+
+            reply = await build_talker_reply(
+                session=session,
+                messages=recent_messages,
+                llm=client,
+                stream=False,
+                case_summary=render_case_summary(updated_case),
+                gaps=to_ask,
+                language=preferred_lang,
+                style_hint=affect_to_style_hint(affect_out),
+                system_notes=f"The user corrected or added details ({change_report}). Acknowledge warmly.",
+            )
+            await add_message(session_id=session_id, role="assistant", text=reply, affect=affect_out.model_dump())
+            return reply, safety_decision
+
+    # -----------------------------------------------------------------------
+    # STATE: ANSWERED
+    # -----------------------------------------------------------------------
+    if current_status == "ANSWERED":
+        # Check if the message contains new case facts (non-empty patch)
+        has_new_facts = bool(
+            understand_out.patch.set_hard_core
+            or understand_out.patch.add_facts
+            or understand_out.patch.add_timeline
+            or understand_out.patch.add_people
+            or understand_out.patch.add_documents
+            or understand_out.patch.add_deadlines
+            or understand_out.patch.update
+            or understand_out.patch.retract
+            or understand_out.intent in (Intent.corrects, Intent.provides_info)
+        )
+
+        if has_new_facts:
+            # Apply new facts, transition back to CONFIRMING, show updated recap
+            updated_case, change_report = apply_patch(
+                case=case_obj,
+                patch=understand_out.patch,
+                user_message=user_message,
+                turn=turn_num,
+            )
+            await save_case_version(
+                session_id=session_id,
+                version=updated_case.version,
+                patch=understand_out.patch.model_dump(),
+                full_case=updated_case.model_dump(),
+            )
+            session["case_file"] = updated_case.model_dump()
+            session["case_version"] = updated_case.version
+            session["status"] = "CONFIRMING"
+
+            recap_text = await make_recap(session=session, case=updated_case, llm=client)
+            change_note = f"I've updated your case notes with your new information ({change_report}).\n\n" if change_report else "I've updated your case notes.\n\n"
+            updated_reply = f"{change_note}{recap_text}"
+
+            await update_session(session_id=session_id, updates={
+                "status": "CONFIRMING",
+                "case_file": session["case_file"],
+                "case_version": session["case_version"],
+                "turn_count": turn_num,
+            })
+            await add_message(session_id=session_id, role="assistant", text=updated_reply, affect=affect_out.model_dump())
+            return ReadyConfirmation(updated_reply, safety_decision)
+
+        else:
+            # Follow-up question about the answer -> call presenter in followup mode
+            stored_raw = session.get("last_service_answer")
+            if stored_raw:
+                stored_resp = ServiceResponse.model_validate(stored_raw)
+            else:
+                stored_resp = ServiceResponse(answer="No previous answer recorded.", status="answered")
+
+            followup_reply = await present(
+                session=session,
+                service_response=stored_resp,
+                mode="followup",
+                new_message=user_message,
+                llm=client,
+            )
+            await update_session(session_id=session_id, updates={"turn_count": turn_num})
+            await add_message(session_id=session_id, role="assistant", text=followup_reply, affect=affect_out.model_dump())
+            return followup_reply, safety_decision
+
+    # -----------------------------------------------------------------------
+    # STATE: COLLECTING (Default)
+    # -----------------------------------------------------------------------
+    # Apply patch in code, validate, and save new case version
+    updated_case, change_report = apply_patch(
+        case=case_obj,
+        patch=understand_out.patch,
+        user_message=user_message,
+        turn=turn_num,
+    )
+    await save_case_version(
+        session_id=session_id,
+        version=updated_case.version,
+        patch=understand_out.patch.model_dump(),
+        full_case=updated_case.model_dump(),
+    )
+    session["case_file"] = updated_case.model_dump()
+    session["case_version"] = updated_case.version
+
+    # Find gaps (FAST_MODEL)
     gap_analysis = await find_gaps(session=session, case=updated_case, llm=client)
 
-    # 7. Check readiness in pure code
+    # Check readiness in pure code
     user_wants_now = understand_out.wants_answer_now or (understand_out.intent == Intent.wants_answer_now)
     ready, ready_reason = is_ready(
         case=updated_case,
@@ -192,25 +408,16 @@ async def handle_turn(
         session=session,
     )
 
-    # Print debug diagnostics
     if debug:
-        print(f"\n[DEBUG] Intent: {understand_out.intent.value}", file=sys.stderr)
-        print(
-            f"[DEBUG] Affect: distress={affect_out.distress}, urgency={affect_out.urgency}, "
-            f"anger={affect_out.anger}, confusion={affect_out.confusion}, "
-            f"self_harm={affect_out.crisis_self_harm}, violence={affect_out.crisis_violence_or_abuse}, "
-            f"detention={affect_out.crisis_detention}",
-            file=sys.stderr,
-        )
         gaps_desc = ", ".join(f"{g.topic} ({g.impact})" for g in gap_analysis.gaps) if gap_analysis.gaps else "none"
-        print(f"[DEBUG] Gaps: {gaps_desc}", file=sys.stderr)
-        print(f"[DEBUG] Readiness: ready={ready}, reason='{ready_reason}'", file=sys.stderr)
+        print(f"[DEBUG GAPS] {gaps_desc}", file=sys.stderr)
+        print(f"[DEBUG READINESS] ready={ready}, reason='{ready_reason}'", file=sys.stderr)
 
-    # Keep session['case_file'] synchronized in case is_ready added assumptions
     session["case_file"] = updated_case.model_dump()
 
-    # If ready, transition state to CONFIRMING and return READY_FOR_CONFIRMATION
+    # If ready: generate recap (SMART tier), save as assistant message, status CONFIRMING
     if ready:
+        recap_text = await make_recap(session=session, case=updated_case, llm=client)
         session["status"] = "CONFIRMING"
         await update_session(session_id=session_id, updates={
             "status": "CONFIRMING",
@@ -219,10 +426,10 @@ async def handle_turn(
             "turn_count": turn_num,
             "asked_counts": session.get("asked_counts", {}),
         })
-        return ReadyConfirmation("READY_FOR_CONFIRMATION", safety_decision)
+        await add_message(session_id=session_id, role="assistant", text=recap_text, affect=affect_out.model_dump())
+        return ReadyConfirmation(recap_text, safety_decision)
 
-    # 8. Otherwise the talker writes the reply
-    # Select top gaps to ask and track their asked counts
+    # Otherwise talker writes the reply (SMART_MODEL)
     to_ask = filter_gaps_to_ask(
         session=session,
         case=updated_case,
@@ -232,14 +439,12 @@ async def handle_turn(
     for g in to_ask:
         track_asked_gap(session, g.topic)
 
-    # Sync case_file again in case filter_gaps_to_ask added assumptions
     session["case_file"] = updated_case.model_dump()
 
     notes_list: list[str] = []
     if session.get("safety_flags"):
         notes_list.append("A safety message was already shown. Check in gently and do not repeat it.")
 
-    # If the user wanted an answer right now but we can't proceed without hard core, explain why
     if user_wants_now and (not updated_case.hard_core.jurisdiction or not updated_case.hard_core.user_goal):
         notes_list.append(
             "The user asked for an immediate answer, but we cannot proceed without their location/jurisdiction "
@@ -255,7 +460,6 @@ async def handle_turn(
         "turn_count": turn_num,
         "asked_counts": session.get("asked_counts", {}),
     })
-
 
     if stream:
         raw_stream = await build_talker_reply(
@@ -284,4 +488,3 @@ async def handle_turn(
         )
         await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_out.model_dump())
         return full_text, safety_decision
-

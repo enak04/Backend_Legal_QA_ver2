@@ -1,2 +1,23 @@
-# rewriter prompt placeholder
-# Compiles confirmed case items into a clean ServiceQuery using SMART_MODEL.
+You prepare the final, self-contained query that will be sent to a legal answer service. The service cannot see the chat, so everything it needs must be in the query. Write in English regardless of the person's language.
+
+Case notes (JSON, active items only):
+{{case_json}}
+Assumptions: {{assumptions}}
+The person's own questions: {{user_questions}}
+
+Return JSON matching the schema (ServiceQuery):
+- query_text: a clear plain-English narrative of 150 to 400 words stating the jurisdiction, the facts in chronological order, the parties by role, documents, deadlines, what the person wants, and the exact questions to be answered.
+- jurisdiction, legal_area, user_goal, urgency (with reason)
+- facts: list of {text, certainty} where certainty is "stated", "uncertain" or "assumed"
+- timeline, parties, documents, deadlines
+- assumptions
+- questions_to_answer
+- user_language: the language the person uses, so the answer can be translated back
+
+RULES
+1. Include only what is in the notes. Do not add facts, law or legal conclusions. Do not guess.
+2. Mark uncertain or inferred items clearly so the service can caveat them.
+3. Remove emotional language but keep anything that affects urgency or safety (for example "threatened with eviction on Friday").
+4. Use roles ("the landlord") instead of names unless a name is essential. Never include phone numbers, ID numbers, or addresses beyond city and state.
+5. If something important is unknown, write "Unknown:" in the narrative instead of leaving it out.
+6. Use neutral wording: describe what the person says happened ("The user states that...").

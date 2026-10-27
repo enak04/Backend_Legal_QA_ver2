@@ -1,2 +1,13 @@
-# faithfulness prompt placeholder
-# Verifies that presenter text accurately and faithfully reflects the service answer using FAST_MODEL.
+You check a chat message against the source answer it is supposed to restate.
+
+SOURCE (legal service answer):
+{{service_answer}}
+
+CHAT MESSAGE:
+{{presenter_text}}
+
+Return JSON:
+- unsupported_claims: statements in the chat message that state a legal rule, a law, section or case citation, a deadline, an amount, a step, a prediction or a recommendation that is NOT in the source. Translation and simplification of source content are fine.
+- omitted_critical: warnings, deadlines or caveats in the source that the chat message left out.
+- ok: true only if both lists are empty.
+Be strict about legal content and lenient about wording and tone.

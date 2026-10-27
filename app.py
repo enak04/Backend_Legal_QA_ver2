@@ -299,3 +299,12 @@ async def delete_session_endpoint(session_id: str):
 
     await delete_session(session_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Backend_Legal_QA Compatibility Routes (/api/modes, /api/conversations, etc.)
+# ---------------------------------------------------------------------------
+from src.compat_routes import router as compat_router
+
+app.include_router(compat_router)
+

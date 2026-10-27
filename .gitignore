@@ -10,3 +10,6 @@ __pycache__/
 
 # Evaluation outputs and results
 evals/results/
+
+# Local database fallback data
+.mongo_dev_data.json

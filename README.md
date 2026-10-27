@@ -108,3 +108,9 @@ Update your `.env` file with:
 | `evals/run_evals.py` | Script that executes automated persona evaluations against the chatbot. |
 | `evals/thresholds.json` | Benchmark thresholds for safety, accuracy, and turn limits in evaluations. |
 | `tests/__init__.py` | Marks `tests` as a Python test package. |
+| `tests/conftest.py` | Pytest fixtures and mock environment variable configuration. |
+| `tests/test_config.py` | Tests for settings loading and missing key validation. |
+| `tests/test_db.py` | Tests for database helpers and mongomock fixtures. |
+| `tests/test_llm.py` | Tests for FakeLLM, Pydantic validation, and streaming. |
+| `tests/test_prompts.py` | Tests for prompt loading, hash computation, and variable rendering. |
+| `tests/test_talker.py` | Tests for talker prompt assembly and `<user_message>` tag wrapping. |

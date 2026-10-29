@@ -125,7 +125,15 @@ class LLM(BaseLLM):
                         await asyncio.sleep(backoff)
                         backoff *= 2
                         continue
-                response.raise_for_status()
+                if response.is_error:
+                    try:
+                        err_data = response.json()
+                        err_msg = err_data.get("error", {}).get("message")
+                        if err_msg:
+                            raise LLMOutputError(f"LLM API error ({response.status_code}): {err_msg}")
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+                    response.raise_for_status()
                 return response
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 if attempt < retries:

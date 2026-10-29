@@ -140,6 +140,29 @@ def init_db(db: Database, ttl_days: int = 30) -> None:
     # service_calls
     db.service_calls.create_index("ts", expireAfterSeconds=ttl_seconds)
 
+    # Migrate any existing sessions without embedded messages
+    _migrate_embed_messages_sync(db)
+
+
+def _migrate_embed_messages_sync(db: Database) -> None:
+    """Consolidates flat messages into embedded session documents if not already present."""
+    try:
+        sessions = list(db.sessions.find({
+            "$or": [
+                {"messages": {"$exists": False}},
+                {"messages": {"$size": 0}},
+            ]
+        }))
+        for s in sessions:
+            sid = s.get("_id")
+            if not sid:
+                continue
+            msgs = list(db.messages.find({"session_id": sid}).sort("ts", pymongo.ASCENDING))
+            if msgs:
+                db.sessions.update_one({"_id": sid}, {"$set": {"messages": msgs}})
+    except Exception:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Synchronous helper implementations
@@ -164,6 +187,7 @@ def _create_session_sync(
         "case_file": {},
         "case_version": 0,
         "language": language,
+        "messages": [],
         "consent": {
             "granted": consent,
             "timestamp": consent_ts or (now if consent else None),
@@ -212,6 +236,15 @@ def _add_message_sync(
         "affect": affect or {},
         "ts": now,
     }
+    # Embed message directly into the session document
+    target_db.sessions.update_one(
+        {"_id": session_id},
+        {
+            "$push": {"messages": msg_doc},
+            "$set": {"updated_at": now},
+        },
+    )
+    # Also keep messages collection synchronized for querying
     target_db.messages.insert_one(msg_doc)
     _persist_mock_if_needed(target_db)
     return msg_doc
@@ -219,6 +252,9 @@ def _add_message_sync(
 
 def _get_recent_messages_sync(session_id: str, n: int, db: Database | None = None) -> list[dict]:
     target_db = db or get_db()
+    session = target_db.sessions.find_one({"_id": session_id})
+    if session and "messages" in session and session["messages"]:
+        return list(session["messages"][-n:])
     cursor = target_db.messages.find({"session_id": session_id}).sort("ts", pymongo.DESCENDING).limit(n)
     docs = list(cursor)
     # Reverse to return chronological order (oldest -> newest)
@@ -228,6 +264,9 @@ def _get_recent_messages_sync(session_id: str, n: int, db: Database | None = Non
 
 def _get_all_messages_sync(session_id: str, db: Database | None = None) -> list[dict]:
     target_db = db or get_db()
+    session = target_db.sessions.find_one({"_id": session_id})
+    if session and "messages" in session and session["messages"]:
+        return list(session["messages"])
     cursor = target_db.messages.find({"session_id": session_id}).sort("ts", pymongo.ASCENDING)
     return list(cursor)
 

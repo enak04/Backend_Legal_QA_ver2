@@ -63,8 +63,9 @@ def affect_to_style_hint(affect: AffectReading) -> str:
     # Distress guidance
     if affect.distress >= 2:
         d_hint = (
-            "The person is distressed. Acknowledge their feelings first in one or two warm sentences. "
-            "Ask only ONE gentle, easy question. Keep it very short."
+            "The person is distressed. Acknowledge their feelings first in one brief professional phrase. "
+            "Do NOT provide therapy, counseling, or ask about personal support networks; focus strictly on legal facts. "
+            "Ask only ONE gentle, easy question."
         )
         if affect.distress == 3:
             d_hint += " Do not ask for dates, documents or amounts this turn."

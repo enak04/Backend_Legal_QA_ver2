@@ -78,6 +78,15 @@ async def test_messages_chronological_order():
     assert recent[0]["text"] == "Second message"
     assert recent[1]["text"] == "Third message"
 
+    # Verify embedded messages in session document
+    session_doc = await get_session(sid)
+    assert session_doc is not None
+    assert "messages" in session_doc
+    assert len(session_doc["messages"]) == 3
+    assert session_doc["messages"][0]["text"] == "First message"
+    assert session_doc["messages"][1]["text"] == "Second message"
+    assert session_doc["messages"][2]["text"] == "Third message"
+
 
 @pytest.mark.asyncio
 async def test_save_case_version():

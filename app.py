@@ -308,3 +308,12 @@ from src.compat_routes import router as compat_router
 
 app.include_router(compat_router)
 
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
+
+

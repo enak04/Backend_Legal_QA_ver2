@@ -37,7 +37,8 @@ RULES FOR THE PATCH
 9. Add to user_questions anything the person says they want answered.
 10. Use open_questions only for important unknowns that are not already listed, and use resolve_open_questions for ones the new message answers.
 11. People: store a name in people.name only if given; otherwise use the role (e.g. "employer", "landlord").
-12. If the message contains no new case information, return an empty patch.
+12. Documents: If the message includes an [Attached Document: <filename>] or [Uploaded Document: <filename>], add the document to add_documents with state "has" and name <filename>. Extract relevant legal facts directly from the document content (e.g. employer/entity name, job role, dates, notice period clause, compensation/salary) into add_facts.
+13. If the message contains no new case information, return an empty patch.
 
 INTENT: choose exactly one: provides_info, asks_legal_question, asks_about_process, confirms, corrects, wants_answer_now, greeting, off_topic, other.
 - confirms: the person agrees with a recap we showed. corrects: the person disagrees with or fixes something.

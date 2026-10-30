@@ -362,14 +362,115 @@
       40% { transform: scale(1); opacity: 1; }
     }
 
-    /* Input Bar */
-    .input-bar {
+    /* Input Bar & Attachments */
+    .input-container {
       background: var(--surface);
       border-top: 1px solid var(--border);
-      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .attachment-preview {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      margin: 12px 20px 0 20px;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    .attachment-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .attachment-icon {
+      font-size: 15px;
+      color: var(--primary);
+    }
+
+    .attachment-name {
+      font-weight: 500;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 300px;
+    }
+
+    .attachment-size {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .btn-remove-attachment {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+      line-height: 1;
+    }
+
+    .btn-remove-attachment:hover {
+      color: var(--danger);
+      background: var(--danger-bg);
+    }
+
+    .input-bar {
+      padding: 12px 20px 14px 20px;
       display: flex;
       gap: 10px;
       align-items: flex-end;
+    }
+
+    .btn-attach {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-muted);
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-attach:hover {
+      background: var(--surface-subtle);
+      color: var(--primary);
+      border-color: var(--border-focus);
+    }
+
+    .btn-attach:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #ffffff;
     }
 
     .input-bar textarea {
@@ -518,10 +619,25 @@
         </div>
       </div>
 
-      <!-- Message Input Bar -->
-      <div class="input-bar">
-        <textarea id="message-input" placeholder="Describe what happened..." rows="1"></textarea>
-        <button id="btn-send" class="btn-send" disabled>Send</button>
+      <!-- Message Input Container -->
+      <div class="input-container">
+        <!-- Attachment Preview Bar -->
+        <div id="attachment-preview" class="attachment-preview" style="display: none;">
+          <div class="attachment-info">
+            <span class="attachment-icon">📎</span>
+            <span id="attachment-name" class="attachment-name"></span>
+            <span id="attachment-size" class="attachment-size"></span>
+          </div>
+          <button id="btn-remove-attachment" type="button" class="btn-remove-attachment" title="Remove attachment">✕</button>
+        </div>
+
+        <!-- Input Row -->
+        <div class="input-bar">
+          <input type="file" id="file-input" style="display: none;" accept=".pdf,.doc,.docx,.txt,.csv,.json,.png,.jpg,.jpeg">
+          <button id="btn-attach" type="button" class="btn-attach" title="Attach document (PDF, DOCX, TXT, etc.)">📎</button>
+          <textarea id="message-input" placeholder="Describe what happened or attach a document..." rows="1"></textarea>
+          <button id="btn-send" class="btn-send" disabled>Send</button>
+        </div>
       </div>
     </section>
 
@@ -535,6 +651,7 @@
     let sessionId = null;
     let apiKey = "test_app_key"; // Default API key configured in .env
     let isStreaming = false;
+    let attachedFile = null;
 
     // Elements
     const consentScreen = document.getElementById("consent-screen");
@@ -548,7 +665,31 @@
     const typingText = document.getElementById("typing-text");
     const messageInput = document.getElementById("message-input");
     const btnSend = document.getElementById("btn-send");
+    const btnAttach = document.getElementById("btn-attach");
+    const fileInput = document.getElementById("file-input");
+    const attachmentPreview = document.getElementById("attachment-preview");
+    const attachmentName = document.getElementById("attachment-name");
+    const attachmentSize = document.getElementById("attachment-size");
+    const btnRemoveAttachment = document.getElementById("btn-remove-attachment");
     const toast = document.getElementById("toast");
+
+    // Utilities
+    function escapeHtml(str) {
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return "0 B";
+      const k = 1024;
+      const sizes = ["B", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    }
 
     // Toast Helper
     function showToast(message) {
@@ -564,6 +705,36 @@
       statusPill.textContent = lower;
       statusPill.className = "status-badge " + lower;
     }
+
+    function updateSendButtonState() {
+      const hasText = Boolean(messageInput.value.trim());
+      const hasFile = Boolean(attachedFile);
+      btnSend.disabled = isStreaming || (!hasText && !hasFile);
+    }
+
+    // Attachment Handlers
+    btnAttach.addEventListener("click", () => {
+      if (isStreaming) return;
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      attachedFile = file;
+      attachmentName.textContent = file.name;
+      attachmentSize.textContent = `(${formatBytes(file.size)})`;
+      attachmentPreview.style.display = "flex";
+      updateSendButtonState();
+    });
+
+    btnRemoveAttachment.addEventListener("click", () => {
+      attachedFile = null;
+      fileInput.value = "";
+      attachmentPreview.style.display = "none";
+      updateSendButtonState();
+    });
 
     // Consent Checkbox Handler
     consentCheckbox.addEventListener("change", (e) => {
@@ -613,13 +784,30 @@
     });
 
     // Append Message to UI
-    function appendMessage(role, text) {
+    function appendMessage(role, text = "", attachment = null) {
       const msgDiv = document.createElement("div");
       msgDiv.className = `message ${role}`;
 
       const bubble = document.createElement("div");
       bubble.className = "message-bubble";
-      bubble.textContent = text;
+
+      if (attachment) {
+        const chip = document.createElement("div");
+        chip.className = "attachment-chip";
+        chip.innerHTML = `<span>📎</span> <span>${escapeHtml(attachment.name)}</span> <span style="opacity: 0.8; font-size: 11px;">(${formatBytes(attachment.size)})</span>`;
+        bubble.appendChild(chip);
+      }
+
+      if (text) {
+        if (attachment) {
+          const txtDiv = document.createElement("div");
+          txtDiv.textContent = text;
+          bubble.appendChild(txtDiv);
+        } else {
+          bubble.textContent = text;
+        }
+      }
+
       msgDiv.appendChild(bubble);
 
       const meta = document.createElement("div");
@@ -636,7 +824,7 @@
     messageInput.addEventListener("input", () => {
       messageInput.style.height = "auto";
       messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
-      btnSend.disabled = isStreaming || !messageInput.value.trim();
+      updateSendButtonState();
     });
 
     // Enter Key Handler (Shift+Enter for newline)
@@ -659,13 +847,18 @@
     // Send Message & Stream Response
     async function sendMessage() {
       const text = messageInput.value.trim();
-      if (!text || isStreaming || !sessionId) return;
+      const file = attachedFile;
+      if ((!text && !file) || isStreaming || !sessionId) return;
 
       // Add user message to UI
-      appendMessage("user", text);
+      appendMessage("user", text, file);
       messageInput.value = "";
       messageInput.style.height = "auto";
+      attachedFile = null;
+      fileInput.value = "";
+      attachmentPreview.style.display = "none";
       btnSend.disabled = true;
+      btnAttach.disabled = true;
       isStreaming = true;
 
       // Show typing indicator
@@ -676,14 +869,30 @@
       let assistantBubble = null;
 
       try {
-        const response = await fetch(`/sessions/${sessionId}/messages`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": apiKey,
-          },
-          body: JSON.stringify({ text }),
-        });
+        let response;
+        if (file) {
+          const formData = new FormData();
+          formData.append("file", file);
+          if (text) {
+            formData.append("text", text);
+          }
+          response = await fetch(`/sessions/${sessionId}/messages`, {
+            method: "POST",
+            headers: {
+              "X-API-Key": apiKey,
+            },
+            body: formData,
+          });
+        } else {
+          response = await fetch(`/sessions/${sessionId}/messages`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-API-Key": apiKey,
+            },
+            body: JSON.stringify({ text }),
+          });
+        }
 
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
@@ -771,7 +980,8 @@
       } finally {
         typingIndicator.style.display = "none";
         isStreaming = false;
-        btnSend.disabled = !messageInput.value.trim();
+        btnAttach.disabled = false;
+        updateSendButtonState();
         messageInput.focus();
       }
     }
@@ -801,6 +1011,9 @@
 
           // Reset UI to Consent Screen
           sessionId = null;
+          attachedFile = null;
+          fileInput.value = "";
+          attachmentPreview.style.display = "none";
           messagesList.innerHTML = "";
           messageInput.value = "";
           consentCheckbox.checked = false;

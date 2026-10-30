@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -182,14 +182,47 @@ async def create_session_endpoint(req: CreateSessionRequest) -> dict[str, Any]:
 
 
 @app.post("/sessions/{session_id}/messages", dependencies=[Depends(verify_api_key)])
-async def post_message_stream(session_id: str, req: MessageRequest):
+async def post_message_stream(session_id: str, request: Request):
     """
-    Handles a user message and streams the assistant response via Server-Sent Events (SSE).
+    Handles a user message and optional uploaded document, streaming assistant responses via SSE.
+    Accepts both JSON and multipart/form-data with file attachments.
     Uses a per-session lock to serialize concurrent messages.
     """
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
+
+    content_type = request.headers.get("content-type", "").lower()
+    user_text = ""
+    document_data = None
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        user_text = str(form.get("text") or form.get("message") or "").strip()
+        upload_file = form.get("file")
+        if upload_file and hasattr(upload_file, "read"):
+            content = await upload_file.read()
+            if content:
+                from src.document_parser import extract_text_from_file
+
+                fname = getattr(upload_file, "filename", "document") or "document"
+                ctype = getattr(upload_file, "content_type", "") or ""
+                extracted = extract_text_from_file(content=content, filename=fname, content_type=ctype)
+                document_data = {
+                    "filename": fname,
+                    "content_type": ctype,
+                    "size_bytes": len(content),
+                    "text": extracted,
+                }
+    else:
+        try:
+            body = await request.json()
+            user_text = str(body.get("text") or body.get("message") or "").strip()
+        except Exception:
+            user_text = ""
+
+    if not user_text and not document_data:
+        raise HTTPException(status_code=422, detail="Message text or document attachment is required.")
 
     async def sse_event_stream():
         lock = await get_session_lock(session_id)
@@ -204,12 +237,13 @@ async def post_message_stream(session_id: str, req: MessageRequest):
             yield f"event: status\ndata: {json.dumps({'status': 'thinking'})}\n\n"
 
             try:
-                # 2. Execute pipeline turn with streaming enabled
+                # 2. Execute pipeline turn with streaming enabled (and optional document)
                 reply_or_stream, safety_decision = await handle_turn(
                     session=current_session,
-                    user_message=req.text.strip(),
+                    user_message=user_text,
                     llm=get_llm_client(),
                     stream=True,
+                    document_data=document_data,
                 )
 
                 # 3. If safety crisis was triggered, send safety event

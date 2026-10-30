@@ -18,6 +18,8 @@ Safety checks run in EVERY state before normal handling.
 
 import asyncio
 import sys
+import uuid
+from datetime import datetime, timezone
 from collections.abc import AsyncGenerator
 
 from src.affect import affect_to_style_hint, read_affect
@@ -85,15 +87,35 @@ async def handle_turn(
     service_client: ServiceClient | None = None,
     stream: bool = False,
     debug: bool = False,
+    document_data: dict | None = None,
 ) -> tuple[str | AsyncGenerator[str, None], SafetyDecision] | ReadyConfirmation:
     """
     Executes one complete conversational turn according to the state machine:
     COLLECTING -> CONFIRMING -> ANSWERED.
+    Supports optional document_data dict (filename, content_type, size_bytes, text).
     """
     settings = get_settings()
     client = llm or LLM()
     srv_client = service_client or ServiceClient()
     session_id = session["_id"]
+
+    # Process attached document if present
+    if document_data:
+        files = session.setdefault("files", [])
+        files.append({
+            "file_id": document_data.get("file_id") or str(uuid.uuid4())[:8],
+            "filename": document_data.get("filename", "document"),
+            "content_type": document_data.get("content_type", ""),
+            "size_bytes": document_data.get("size_bytes", 0),
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        })
+        await update_session(session_id, {"files": files})
+        doc_filename = document_data.get("filename", "document")
+        doc_text = document_data.get("text", "").strip()
+        if not user_message or not user_message.strip():
+            user_message = f"[Uploaded Document: {doc_filename}]\n\n{doc_text}"
+        else:
+            user_message = f"{user_message.strip()}\n\n[Attached Document: {doc_filename}]\n\n{doc_text}"
 
     # 1. Save user message to database
     await add_message(session_id=session_id, role="user", text=user_message)

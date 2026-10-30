@@ -453,11 +453,20 @@ async def upload_file_endpoint(
     file_id = str(uuid.uuid4())[:12]
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    from src.document_parser import extract_text_from_file
+
+    extracted = extract_text_from_file(
+        content=content,
+        filename=file.filename or "attachment",
+        content_type=file.content_type or "",
+    )
+
     file_record = {
         "file_id": file_id,
         "filename": file.filename or "attachment",
         "content_type": file.content_type or "application/octet-stream",
         "size_bytes": len(content),
+        "extracted_text": extracted,
         "uploaded_at": now_iso,
     }
 

@@ -191,7 +191,7 @@ async def handle_turn(
         is_confirming = (
             understand_out.intent in (Intent.confirms, Intent.wants_answer_now)
             or understand_out.wants_answer_now
-            or any(w in msg_lower for w in ["yes", "proceed", "give me answer", "give answer", "answer", "ok", "sure", "correct", "right", "ahead", "help"])
+            or any(w in msg_lower for w in ["yes", "proceed", "give me answer", "give answer", "answer", "ok", "sure", "correct", "right", "ahead", "help", "nothing else", "nothing", "done", "that's all", "that is all", "give me legal solution"])
         )
         if is_confirming:
             # Build ServiceQuery (SMART tier, with PII redaction)
@@ -425,7 +425,12 @@ async def handle_turn(
     gap_analysis = await find_gaps(session=session, case=updated_case, llm=client)
 
     # Check readiness in pure code
-    user_wants_now = understand_out.wants_answer_now or (understand_out.intent == Intent.wants_answer_now)
+    msg_cleaned = user_message.strip().lower()
+    is_user_done = (
+        any(phrase in msg_cleaned for phrase in ["nothing else", "no more", "that's all", "that is all", "done", "give me answer", "give answer", "give me legal solution", "give legal solution"])
+        or (msg_cleaned in ("nothing", "no", "nope") and turn_num >= 3)
+    )
+    user_wants_now = understand_out.wants_answer_now or (understand_out.intent == Intent.wants_answer_now) or is_user_done
     ready, ready_reason = is_ready(
         case=updated_case,
         gap_analysis=gap_analysis,
@@ -434,6 +439,25 @@ async def handle_turn(
         settings=settings,
         session=session,
     )
+
+    to_ask = filter_gaps_to_ask(
+        session=session,
+        case=updated_case,
+        gaps=gap_analysis.gaps,
+        max_questions=settings.max_questions_per_turn,
+    )
+
+    # If the user signals they have nothing else to add, or if no gaps remain to ask,
+    # fill any missing hard-core defaults and mark as ready so we transition to confirmation
+    if (is_user_done or not to_ask) and not ready:
+        if not (updated_case.hard_core.jurisdiction and updated_case.hard_core.jurisdiction.strip()):
+            updated_case.hard_core.jurisdiction = "General"
+            if "Jurisdiction: General" not in updated_case.assumptions:
+                updated_case.assumptions.append("Jurisdiction: General / Unspecified")
+        if not (updated_case.hard_core.user_goal and updated_case.hard_core.user_goal.strip()):
+            updated_case.hard_core.user_goal = "Legal guidance regarding rights and options"
+        ready = True
+        ready_reason = "No further gaps to ask or user completed input"
 
     if debug:
         gaps_desc = ", ".join(f"{g.topic} ({g.impact})" for g in gap_analysis.gaps) if gap_analysis.gaps else "none"
@@ -457,12 +481,6 @@ async def handle_turn(
         return ReadyConfirmation(recap_text, safety_decision)
 
     # Otherwise talker writes the reply (SMART_MODEL)
-    to_ask = filter_gaps_to_ask(
-        session=session,
-        case=updated_case,
-        gaps=gap_analysis.gaps,
-        max_questions=settings.max_questions_per_turn,
-    )
     for g in to_ask:
         track_asked_gap(session, g.topic)
 

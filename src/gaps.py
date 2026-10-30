@@ -80,4 +80,21 @@ async def find_gaps(
         gap_analysis.gaps = (injected + gap_analysis.gaps)[:3]
         gap_analysis.blocking_for_service = True
 
+    # Ensure hard-core jurisdiction is prioritized if missing and not already asked twice
+    has_jurisdiction = bool(case.hard_core.jurisdiction and case.hard_core.jurisdiction.strip())
+    if not has_jurisdiction:
+        times_asked_jur = asked_counts.get("Location / Jurisdiction", 0)
+        if times_asked_jur < 2 and not any("location" in g.topic.lower() or "jurisdiction" in g.topic.lower() for g in gap_analysis.gaps):
+            gap_analysis.gaps.insert(
+                0,
+                Gap(
+                    topic="Location / Jurisdiction",
+                    question_hint="What city or state did this occur in?",
+                    why_it_matters="Applicable labor and employment laws depend on the state or city where you worked.",
+                    impact="high",
+                    example_answer="Bangalore, Karnataka",
+                    can_skip=False,
+                ),
+            )
+
     return gap_analysis

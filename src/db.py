@@ -97,7 +97,7 @@ def get_db(client: Any | None = None, db_name: str | None = None) -> Database:
     if _database is None:
         settings = get_settings()
         try:
-            candidate: Any = pymongo.MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=1000)
+            candidate: Any = pymongo.MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
             candidate.admin.command("ping")
             _mongo_client = candidate
             _database = _mongo_client[settings.db_name]

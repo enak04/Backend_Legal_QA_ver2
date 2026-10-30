@@ -753,8 +753,11 @@
               if (dataObj.status) {
                 updateStatus(dataObj.status);
               }
-              if (assistantBubble && dataObj.reply && !assistantBubble.textContent) {
-                assistantBubble.textContent = dataObj.reply;
+              const finalTxt = dataObj.reply || dataObj.text || "";
+              if (!assistantBubble && finalTxt) {
+                assistantBubble = appendMessage("assistant", finalTxt);
+              } else if (assistantBubble && finalTxt && !assistantBubble.textContent.trim()) {
+                assistantBubble.textContent = finalTxt;
               }
             } else if (eventName === "error") {
               typingIndicator.style.display = "none";

@@ -224,10 +224,14 @@ async def post_message_stream(session_id: str, req: MessageRequest):
                             full_chunks.append(chunk)
                             yield f"event: token\ndata: {json.dumps({'token': chunk, 'text': chunk})}\n\n"
                 else:
-                    # Single token event for hard-coded or non-streamed steps
+                    # Stream non-generator steps (e.g. final legal answer, recap) token-by-token
                     text_str = str(reply_or_stream)
                     full_chunks.append(text_str)
-                    yield f"event: token\ndata: {json.dumps({'token': text_str, 'text': text_str})}\n\n"
+                    words = text_str.split(" ")
+                    for i, w in enumerate(words):
+                        chunk = w if i == len(words) - 1 else w + " "
+                        yield f"event: token\ndata: {json.dumps({'token': chunk, 'text': chunk})}\n\n"
+                        await asyncio.sleep(0.005)
 
                 final_reply = "".join(full_chunks)
 

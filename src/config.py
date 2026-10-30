@@ -91,7 +91,7 @@ def load_settings(env_path: str | Path | None = None) -> Settings:
         service_api_key=os.getenv("SERVICE_API_KEY", "mock_service_key").strip(),
         max_questions_per_turn=int(os.getenv("MAX_QUESTIONS_PER_TURN", "2")),
         history_window=int(os.getenv("HISTORY_WINDOW", "10")),
-        max_collecting_turns=int(os.getenv("MAX_COLLECTING_TURNS", "14")),
+        max_collecting_turns=int(os.getenv("MAX_COLLECTING_TURNS", "6")),
         session_ttl_days=int(os.getenv("SESSION_TTL_DAYS", "30")),
         debug=_str_to_bool(os.getenv("DEBUG"), default=False),
         app_api_key=os.getenv("APP_API_KEY", "test_app_key").strip() or "test_app_key",

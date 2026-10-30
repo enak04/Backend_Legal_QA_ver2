@@ -21,14 +21,22 @@ RULES FOR THE PATCH
 1. Extract only what the person actually said, or what follows with very high certainty. Never invent facts, names, dates, amounts or places.
 2. Every new fact, event, person, document and deadline needs either source "user_said" with an "evidence" field that copies a short exact quote (max 15 words) from the newest message, or source "inferred" with empty evidence and lower confidence.
 3. Confidence: 0.9 or more when stated clearly; 0.6 to 0.8 when hedged ("I think", "around"); below 0.5 for a guess.
-4. Do not repeat items already in the notes. If the person adds detail to an existing item, use "update". If they correct something, use "update" with a reason (never overwrite silently). If they take something back, use "retract" with a reason.
+4. New information vs corrections:
+   - When the person provides new information or answers a question (e.g., tenure, performance, employer type, notice status), ALWAYS add it to "add_facts".
+   - ONLY use "update" if the person is explicitly correcting or fixing a previous fact that was wrong (e.g., "Actually, my salary was 50,000, not 40,000"). NEVER use "update" to replace an earlier distinct fact (like termination reason) with a new fact (like performance review).
+   - If they take something back, use "retract" with a reason.
 5. If the new message contradicts the notes and you cannot tell which is right, keep both and add an open question asking which is correct.
 6. Dates: keep the person's own words in when_text ("last Diwali", "about 3 weeks ago"). Fill when_iso only if you can compute it from today's date with confidence.
-7. Hard core fields: jurisdiction (city, state or country where the matter is; if only the place of residence is known, say so in confidence), user_goal (what the person wants to achieve, in their own terms), urgency (low, medium, high or critical with a reason; a deadline within 7 days, an arrest, threats of violence, or an imminent eviction or termination means high or critical), language, legal_area_guess (a short label such as tenancy, employment, family, consumer, criminal, property, contract; null if unclear).
+7. Hard core fields:
+   - jurisdiction: city, state or country where the matter is.
+   - user_goal: what the person wants to achieve, in their own terms (e.g. reinstatement, compensation, severance, return of deposit).
+   - urgency: low, medium, high or critical with a reason.
+   - language: language and script.
+   - legal_area_guess: MUST be accurately classified. If the issue is about job, termination, fired, employer, company, salary, wages, boss, workplace, or downsizing -> "employment". If rent, landlord, eviction, flat, tenant -> "tenancy". If divorce, custody, maintenance -> "family". If defective goods, service fault, refund -> "consumer". If police, FIR, crime -> "criminal". Only null if completely unknown.
 8. Feelings are not facts. Do not put emotions ("he is terrified") in the facts list. Only record things that happened or are true.
 9. Add to user_questions anything the person says they want answered.
 10. Use open_questions only for important unknowns that are not already listed, and use resolve_open_questions for ones the new message answers.
-11. People: store a name in people.name only if given; otherwise use the role.
+11. People: store a name in people.name only if given; otherwise use the role (e.g. "employer", "landlord").
 12. If the message contains no new case information, return an empty patch.
 
 INTENT: choose exactly one: provides_info, asks_legal_question, asks_about_process, confirms, corrects, wants_answer_now, greeting, off_topic, other.

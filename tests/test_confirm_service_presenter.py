@@ -256,10 +256,10 @@ async def test_answered_followup_question():
 
 
 @pytest.mark.asyncio
-async def test_answered_with_new_facts_returns_to_confirming():
+async def test_answered_with_new_facts_continues_consultation():
     """
-    In ANSWERED state, if user provides new case facts, the patch is applied,
-    status moves back to CONFIRMING, and an updated recap is shown.
+    In ANSWERED state, if user provides new case facts, the patch is silently applied,
+    status remains in ANSWERED, and dynamic continuous legal consultation is provided.
     """
     session = await create_session()
     session["status"] = "ANSWERED"
@@ -272,14 +272,13 @@ async def test_answered_with_new_facts_returns_to_confirming():
         documents=[Document(id="d1", name="N12 Notice", state=DocumentState.has, status=Status.active)],
     ).model_dump()
 
-
     fake_llm = FakeLLM(responses={
         "extractor": UnderstandOutput(
             intent=Intent.provides_info,
             patch=CasePatch(add_documents=[NewDocument(name="Text messages from landlord", state="has")]),
         ),
         "affect": AffectReading(),
-        "confirm_summary": "Here is your updated summary with your text messages included. Does this look accurate?",
+        "presenter": "Having text messages showing the landlord wants higher rent is critical evidence of bad faith.",
     })
 
     reply, decision = await handle_turn(
@@ -289,8 +288,10 @@ async def test_answered_with_new_facts_returns_to_confirming():
         stream=False,
     )
 
-    assert session["status"] == "CONFIRMING"
-    assert "updated" in reply or "summary" in reply
+    assert session["status"] == "ANSWERED"
+    assert "bad faith" in reply
+    # Verify that case_file was updated with the new document
+    assert any(d["name"] == "Text messages from landlord" for d in session["case_file"]["documents"])
 
 
 @pytest.mark.asyncio
@@ -300,8 +301,8 @@ async def test_full_happy_path_start_to_finish():
     1. COLLECTING -> User provides details
     2. COLLECTING -> Ready for confirmation -> Recap shown, status CONFIRMING
     3. CONFIRMING -> User confirms -> Service called -> Answer presented, status ANSWERED
-    4. ANSWERED -> User asks follow-up -> Answered from stored answer
-    5. ANSWERED -> User provides new facts -> Transitions back to CONFIRMING with updated recap!
+    4. ANSWERED -> User asks follow-up -> Answered in followup mode
+    5. ANSWERED -> User provides new facts -> Continues in ANSWERED with updated legal advice!
     """
     session = await create_session()
     srv_client = ServiceClient(use_mock=True)
@@ -368,15 +369,15 @@ async def test_full_happy_path_start_to_finish():
     assert session["status"] == "ANSWERED"
     assert "stated termination date" in reply4
 
-    # 5. Turn 5: ANSWERED -> User provides new facts -> Returns to CONFIRMING with updated recap!
+    # 5. Turn 5: ANSWERED -> User provides new facts -> Stays in ANSWERED and continues consultation!
     fake5 = FakeLLM(responses={
         "extractor": UnderstandOutput(
             intent=Intent.provides_info,
             patch=CasePatch(add_facts=[NewFact(text="Landlord accepted rent yesterday", source="user_said", evidence="accepted rent")]),
         ),
         "affect": AffectReading(),
-        "confirm_summary": "I have updated your case: the landlord accepted rent yesterday. Shall I submit this new detail to the legal team?",
+        "presenter": "The landlord accepting rent yesterday may constitute a waiver of the termination notice.",
     })
     reply5, _ = await handle_turn(session, "Also, my landlord accepted rent yesterday.", llm=fake5, service_client=srv_client, stream=False)
-    assert session["status"] == "CONFIRMING"
-    assert "accepted rent" in reply5
+    assert session["status"] == "ANSWERED"
+    assert "accepted rent" in reply5 or "waiver" in reply5

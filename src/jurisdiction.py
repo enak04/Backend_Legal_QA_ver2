@@ -222,3 +222,4 @@ def canonicalize_jurisdiction(raw_jurisdiction: str | None) -> str | None:
         return f"{city}, {state}"
 
     return raw_jurisdiction
+

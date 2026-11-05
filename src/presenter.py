@@ -180,6 +180,11 @@ async def present(
         session_id=session_id,
     )
 
+    # In followup / consultation mode, return the dynamic advisory response directly
+    if mode == "followup":
+        session["last_presenter_path"] = "followup_consultation"
+        return draft_1
+
     # Guard checks on draft 1
     code_issues_1 = check_code_guard(draft_1, source_answer)
     faith_1 = await check_faithfulness(source_answer, draft_1, client, session_id)

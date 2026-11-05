@@ -358,71 +358,81 @@ async def handle_turn(
             return reply, safety_decision
 
     # -----------------------------------------------------------------------
-    # STATE: ANSWERED
+    # STATE: ANSWERED (Continuous Legal Consultation)
     # -----------------------------------------------------------------------
     if current_status == "ANSWERED":
-        # Check if the message contains new case facts (non-empty patch)
-        has_new_facts = bool(
-            understand_out.patch.set_hard_core
-            or understand_out.patch.add_facts
-            or understand_out.patch.add_timeline
-            or understand_out.patch.add_people
-            or understand_out.patch.add_documents
-            or understand_out.patch.add_deadlines
-            or understand_out.patch.update
-            or understand_out.patch.retract
-            or understand_out.intent in (Intent.corrects, Intent.provides_info)
+        # Silently update CaseFile with any new details from the message
+        updated_case, change_report = apply_patch(
+            case=case_obj,
+            patch=understand_out.patch,
+            user_message=user_message,
+            turn=turn_num,
+        )
+        await save_case_version(
+            session_id=session_id,
+            version=updated_case.version,
+            patch=understand_out.patch.model_dump(),
+            full_case=updated_case.model_dump(),
+        )
+        session["case_file"] = updated_case.model_dump()
+        session["case_version"] = updated_case.version
+
+        # Check if the user is explicitly requesting a formal case recap or case notes
+        msg_lower = user_message.strip().lower()
+        is_requesting_recap = (
+            any(w in msg_lower for w in ["recap my case", "summarize my case", "case recap", "what are my case notes", "show my case notes", "review summary"])
+            or (understand_out.intent == Intent.asks_about_process and any(w in msg_lower for w in ["summary", "recap", "notes"]))
         )
 
-        if has_new_facts:
-            # Apply new facts, transition back to CONFIRMING, show updated recap
-            updated_case, change_report = apply_patch(
-                case=case_obj,
-                patch=understand_out.patch,
-                user_message=user_message,
-                turn=turn_num,
-            )
-            await save_case_version(
-                session_id=session_id,
-                version=updated_case.version,
-                patch=understand_out.patch.model_dump(),
-                full_case=updated_case.model_dump(),
-            )
-            session["case_file"] = updated_case.model_dump()
-            session["case_version"] = updated_case.version
-            session["status"] = "CONFIRMING"
-
+        if is_requesting_recap:
             recap_text = await make_recap(session=session, case=updated_case, llm=client)
-            change_note = f"I've updated your case notes with your new information ({change_report}).\n\n" if change_report else "I've updated your case notes.\n\n"
-            updated_reply = f"{change_note}{recap_text}"
-
             await update_session(session_id=session_id, updates={
-                "status": "CONFIRMING",
                 "case_file": session["case_file"],
                 "case_version": session["case_version"],
                 "turn_count": turn_num,
             })
-            await add_message(session_id=session_id, role="assistant", text=updated_reply, affect=affect_out.model_dump())
-            return ReadyConfirmation(updated_reply, safety_decision)
+            await add_message(session_id=session_id, role="assistant", text=recap_text, affect=affect_out.model_dump())
+            return recap_text, safety_decision
 
+        # Continuous Consultation: If user provided a substantial document or asked for a refreshed assessment,
+        # query the base service to refresh the core advice if appropriate
+        should_refresh_service = bool(
+            understand_out.patch.add_documents
+            and any(d.state.value == "has" for d in understand_out.patch.add_documents)
+            and any(w in msg_lower for w in ["here is", "attached", "uploaded", "new assessment", "re-evaluate", "recalculate"])
+        )
+
+        if should_refresh_service:
+            query = await build_service_query(case=updated_case, llm=client, session=session)
+            session["last_service_query"] = query.model_dump()
+            service_resp = await srv_client.ask(query=query, session_id=session_id)
+            if service_resp.status == "answered":
+                session["last_service_answer"] = service_resp.model_dump()
+                await update_session(session_id=session_id, updates={
+                    "last_service_query": session["last_service_query"],
+                    "last_service_answer": session["last_service_answer"],
+                })
+
+        stored_raw = session.get("last_service_answer")
+        if stored_raw:
+            stored_resp = ServiceResponse.model_validate(stored_raw)
         else:
-            # Follow-up question about the answer -> call presenter in followup mode
-            stored_raw = session.get("last_service_answer")
-            if stored_raw:
-                stored_resp = ServiceResponse.model_validate(stored_raw)
-            else:
-                stored_resp = ServiceResponse(answer="No previous answer recorded.", status="answered")
+            stored_resp = ServiceResponse(answer="Legal consultation active.", status="answered")
 
-            followup_reply = await present(
-                session=session,
-                service_response=stored_resp,
-                mode="followup",
-                new_message=user_message,
-                llm=client,
-            )
-            await update_session(session_id=session_id, updates={"turn_count": turn_num})
-            await add_message(session_id=session_id, role="assistant", text=followup_reply, affect=affect_out.model_dump())
-            return followup_reply, safety_decision
+        followup_reply = await present(
+            session=session,
+            service_response=stored_resp,
+            mode="followup",
+            new_message=user_message,
+            llm=client,
+        )
+        await update_session(session_id=session_id, updates={
+            "case_file": session["case_file"],
+            "case_version": session["case_version"],
+            "turn_count": turn_num,
+        })
+        await add_message(session_id=session_id, role="assistant", text=followup_reply, affect=affect_out.model_dump())
+        return followup_reply, safety_decision
 
     # -----------------------------------------------------------------------
     # STATE: COLLECTING (Default)

@@ -59,7 +59,7 @@ def get_helpline_reply(category: str, language: str = "English") -> str:
     reply = messages.get(lang_key) or messages.get("en")
     if not reply:
         return (
-            "[REVIEW WITH A NATIVE SPEAKER AND A LAWYER] If you are in immediate danger or distress, "
+            "If you are in immediate danger or distress, "
             "please contact emergency services or a local crisis line immediately."
         )
     return reply

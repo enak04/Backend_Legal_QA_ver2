@@ -274,7 +274,7 @@ async def handle_turn(
                     gaps=to_ask,
                     language=preferred_lang,
                     style_hint=affect_to_style_hint(affect_out),
-                    system_notes="The legal team asked for a few additional details before giving advice.",
+                    system_notes="A few additional details are needed before comprehensive advice can be given.",
                 )
                 await add_message(session_id=session_id, role="assistant", text=talker_reply, affect=affect_out.model_dump())
                 return talker_reply, safety_decision

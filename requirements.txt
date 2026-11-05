@@ -8,6 +8,7 @@ fastapi>=0.110.0
 uvicorn>=0.28.0
 python-multipart>=0.0.9
 pypdf>=5.0.0
+Pillow>=10.0.0
 
 # Testing dependencies
 pytest>=8.0.0

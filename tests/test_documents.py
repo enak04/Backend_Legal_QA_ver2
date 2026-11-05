@@ -210,3 +210,59 @@ def test_multipart_message_empty_fails(setup_fake_llm):
         data={"text": "   "},
     )
     assert response.status_code == 422
+
+
+def test_extract_text_image_fallback_in_mock():
+    """Verify image parsing returns metadata tag when in mock/test mode without live key."""
+    # 1x1 transparent PNG bytes
+    dummy_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    extracted = extract_text_from_file(dummy_png, "notice.png", "image/png")
+    assert "notice.png" in extracted
+
+
+def test_extract_text_image_vision_mocked(monkeypatch):
+    """Verify image parsing calls OpenAI Vision API when configured and extracts text."""
+    from unittest.mock import MagicMock
+    import httpx
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": "Sender: Google People Operations\nTermination effective November 5, 2026."
+                }
+            }
+        ]
+    }
+
+    monkeypatch.setattr(httpx, "post", lambda *args, **kwargs: mock_resp)
+
+    # Temporarily set valid-looking key in settings
+    from src.config import Settings
+    import src.config
+    current_settings = src.config.get_settings()
+    test_settings = Settings(
+        provider="openai",
+        llm_api_key="sk-real-looking-key-123456",
+        fast_model="gpt-4o-mini",
+        smart_model="gpt-4o",
+        mongodb_uri=current_settings.mongodb_uri,
+        db_name=current_settings.db_name,
+        use_mock_service=current_settings.use_mock_service,
+        service_url=current_settings.service_url,
+        service_api_key=current_settings.service_api_key,
+        max_questions_per_turn=current_settings.max_questions_per_turn,
+        history_window=current_settings.history_window,
+        max_collecting_turns=current_settings.max_collecting_turns,
+        session_ttl_days=current_settings.session_ttl_days,
+        debug=current_settings.debug,
+    )
+    monkeypatch.setattr(src.config, "get_settings", lambda: test_settings)
+
+    dummy_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    extracted = extract_text_from_file(dummy_png, "termination_email.png", "image/png")
+    assert "Google People Operations" in extracted
+    assert "November 5, 2026" in extracted
+

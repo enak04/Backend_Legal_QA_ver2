@@ -37,7 +37,10 @@ RULES FOR THE PATCH
 9. Add to user_questions anything the person says they want answered.
 10. Use open_questions only for important unknowns that are not already listed, and use resolve_open_questions for ones the new message answers.
 11. People: store a name in people.name only if given; otherwise use the role (e.g. "employer", "landlord").
-12. Documents: If the message includes an [Attached Document: <filename>] or [Uploaded Document: <filename>], add the document to add_documents with state "has" and name <filename>. Extract relevant legal facts directly from the document content (e.g. employer/entity name, job role, dates, notice period clause, compensation/salary) into add_facts.
+12. Documents: If the message includes an [Attached Document: <filename>] or [Uploaded Document: <filename>]:
+   - Add the document to add_documents with state "has". If the filename is a generic camera, screenshot, or generated name (e.g., "Gemini_Generated_Image...", "IMG_...", "Screenshot_..."), identify its legal nature and use a descriptive title such as "Termination Notice (<filename>)" or "Employment Contract (<filename>)".
+   - In "notes", write a concise 1-sentence summary of what the document actually is and establishes (e.g., "Termination email from Google People Operations dated Nov 5, 2026 confirming immediate separation without prior notice").
+   - Extract all relevant legal facts directly from the document content (employer/entity name, job role, dates, notice period, severance/wages, account deactivation) into add_facts.
 13. If the message contains no new case information, return an empty patch.
 
 INTENT: choose exactly one: provides_info, asks_legal_question, asks_about_process, confirms, corrects, wants_answer_now, greeting, off_topic, other.

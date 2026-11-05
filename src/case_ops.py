@@ -393,7 +393,8 @@ def render_case_summary(case: CaseFile | dict) -> str:
     if active_docs:
         lines.append("\nDocuments:")
         for d in active_docs:
-            lines.append(f"- {d.name} [{d.state.value}]")
+            note_str = f" - {d.notes}" if d.notes else ""
+            lines.append(f"- {d.name} [{d.state.value}]{note_str}")
 
     # Active Deadlines
     active_deadlines = [dl for dl in c.deadlines if dl.status == Status.active]

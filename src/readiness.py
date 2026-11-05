@@ -35,6 +35,19 @@ def is_ready(
     # 1. Hard core check: jurisdiction and user_goal must be present
     has_jurisdiction = bool(case.hard_core.jurisdiction and case.hard_core.jurisdiction.strip())
     has_goal = bool(case.hard_core.user_goal and case.hard_core.user_goal.strip())
+
+    # Intelligent legal goal inference: if jurisdiction is known and user has questions or active facts
+    if has_jurisdiction and not has_goal:
+        if case.user_questions:
+            case.hard_core.user_goal = f"Assess legal rights and remedies regarding: {case.user_questions[0]}"
+            has_goal = True
+        elif getattr(case.hard_core, "legal_area_guess", None) and (turn_count >= settings.max_collecting_turns):
+            case.hard_core.user_goal = f"Obtain legal advice and remedies for {case.hard_core.legal_area_guess} dispute"
+            has_goal = True
+        elif len([f for f in case.facts if f.status.value == "active"]) >= 2 and (turn_count >= settings.max_collecting_turns):
+            case.hard_core.user_goal = "Understand legal rights, evaluate liability, and determine available remedies"
+            has_goal = True
+
     if not (has_jurisdiction and has_goal):
         missing = []
         if not has_jurisdiction:

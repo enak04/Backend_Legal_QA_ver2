@@ -17,6 +17,7 @@ import json
 import re
 from typing import Any
 
+from src.jurisdiction import canonicalize_jurisdiction, resolve_indian_jurisdiction
 from src.schemas import (
     CaseFile,
     CasePatch,
@@ -113,6 +114,8 @@ def apply_patch(
                     current_case.hard_core.urgency = Urgency.model_validate(v)
                 elif isinstance(v, Urgency):
                     current_case.hard_core.urgency = v
+            elif k == "jurisdiction" and isinstance(v, str):
+                current_case.hard_core.jurisdiction = canonicalize_jurisdiction(v) or v
             else:
                 setattr(current_case.hard_core, k, v)
 
@@ -351,7 +354,11 @@ def render_case_summary(case: CaseFile | dict) -> str:
 
     # Hard Core First
     hc = c.hard_core
-    lines.append(f"Jurisdiction: {hc.jurisdiction or 'Unknown'} (confidence: {hc.jurisdiction_confidence:.1f})")
+    jur_display = hc.jurisdiction or 'Unknown'
+    res = resolve_indian_jurisdiction(hc.jurisdiction)
+    if res and res["state"].lower() not in jur_display.lower():
+        jur_display = f"{res['city']}, {res['state']} (High Court: {res['high_court']})"
+    lines.append(f"Jurisdiction: {jur_display} (confidence: {hc.jurisdiction_confidence:.1f})")
     lines.append(f"User goal: {hc.user_goal or 'Not yet specified'}")
     lines.append(f"Urgency: {hc.urgency.level.value} - {hc.urgency.reason or 'No reason provided'}")
     lines.append(f"Legal area guess: {hc.legal_area_guess or 'Unclear'}")
@@ -416,5 +423,12 @@ def render_case_json_for_prompts(case: CaseFile | dict) -> str:
     if isinstance(case, CaseFile):
         data = case.model_dump()
     else:
-        data = case
+        data = dict(case)
+
+    # Enrich with Indian jurisdiction statutes if applicable
+    jur = data.get("hard_core", {}).get("jurisdiction")
+    res = resolve_indian_jurisdiction(jur)
+    if res:
+        data["governing_jurisdiction_details"] = res
+
     return json.dumps(data, indent=2)

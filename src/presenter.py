@@ -17,6 +17,7 @@ import sys
 
 from src.case_ops import render_case_summary
 from src.config import get_settings
+from src.legal_advisory import get_electronic_evidence_guidance, get_limitation_warning
 from src.llm import LLM, BaseLLM
 from src.messages import DISCLAIMER
 from src.prompts import load_prompt, render
@@ -63,10 +64,14 @@ def check_code_guard(presenter_text: str, source_answer: str) -> list[str]:
     return violations
 
 
-def fallback_template(service_response: ServiceResponse, disclaimer: str = DISCLAIMER) -> str:
+def fallback_template(
+    service_response: ServiceResponse,
+    disclaimer: str = DISCLAIMER,
+    advisory_notes: list[str] | None = None,
+) -> str:
     """
     Fallback plain template that prints the service answer's sections
-    with light formatting and the disclaimer.
+    with light formatting, statutory advisories, and the disclaimer.
     """
     parts: list[str] = []
     if service_response.sections:
@@ -77,6 +82,11 @@ def fallback_template(service_response: ServiceResponse, disclaimer: str = DISCL
         parts.append(service_response.answer.strip())
     else:
         parts.append("Our legal service has processed your case.")
+
+    if advisory_notes:
+        notes_text = "\n\n".join(f"• {n}" for n in advisory_notes if n)
+        if notes_text:
+            parts.append(f"Statutory Timelines & Evidentiary Guidance:\n{notes_text}")
 
     parts.append(f"\n{disclaimer.strip()}")
     return "\n\n".join(parts)
@@ -130,12 +140,24 @@ async def present(
 
 
     # Direct base model delivery: provide the base model answer as it is, without rephrasing
+    advisory_notes: list[str] = []
+    limitation_alert = get_limitation_warning(
+        dispute_type=case_obj.hard_core.legal_area_guess,
+        facts=case_obj.facts,
+    )
+    if limitation_alert:
+        advisory_notes.append(limitation_alert)
+
+    evidence_alert = get_electronic_evidence_guidance(facts=case_obj.facts)
+    if evidence_alert:
+        advisory_notes.append(evidence_alert)
+
     settings = get_settings()
     if settings.direct_service_answer and mode == "initial":
         from src.llm import FakeLLM
         if not (isinstance(client, FakeLLM) and "presenter" in getattr(client, "responses", {})):
             session["last_presenter_path"] = "direct_base_model"
-            return fallback_template(service_response, DISCLAIMER)
+            return fallback_template(service_response, DISCLAIMER, advisory_notes=advisory_notes)
 
     template_text, _ = load_prompt("presenter")
     rendered_system = render(
@@ -206,4 +228,4 @@ async def present(
     # 3. Still failed: Fall back to plain template
     session["last_presenter_path"] = "fallback"
     print("[Presenter Guard] Path: fallback (Template used)", file=sys.stderr)
-    return fallback_template(service_response, DISCLAIMER)
+    return fallback_template(service_response, DISCLAIMER, advisory_notes=advisory_notes)

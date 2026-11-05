@@ -13,6 +13,7 @@ import base64
 import io
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -172,11 +173,46 @@ def extract_text_from_file(
     if not text:
         text = f"[Attached file: {filename} (empty content)]"
 
-    # Truncate if exceeds safe character limit
+    # Smart clause-targeted extraction if exceeds safe character limit
     if len(text) > max_length:
-        text = (
-            text[:max_length]
-            + f"\n\n[... Document truncated at {max_length} characters ...]"
-        )
+        if max_length > 1000:
+            # Multi-page contract / agreement: extract header, critical clauses, and signature tail
+            head_len = min(1500, max(200, max_length // 4))
+            tail_len = min(1000, max(150, max_length // 6))
+            head = text[:head_len]
+            tail = text[-tail_len:]
+
+            key_patterns = re.compile(
+                r"(?:termination|notice\s+period|severance|governing\s+law|jurisdiction|dispute\s+resolution|"
+                r"arbitration|compensation|salary|wages|deposit|rent|lock-in|indemnity)",
+                re.IGNORECASE,
+            )
+
+            # Find matching paragraphs from the middle
+            middle_text = text[head_len:-tail_len]
+            middle_paragraphs = middle_text.split("\n\n")
+            extracted_clauses = []
+            cur_len = len(head) + len(tail)
+
+            for p in middle_paragraphs:
+                p_clean = p.strip()
+                if p_clean and key_patterns.search(p_clean):
+                    if cur_len + len(p_clean) + 50 < max_length:
+                        extracted_clauses.append(p_clean)
+                        cur_len += len(p_clean) + 50
+
+            if extracted_clauses:
+                clauses_block = "\n\n[... Extracted Critical Clauses ...]\n\n" + "\n\n".join(extracted_clauses)
+                text = f"{head}{clauses_block}\n\n[... Remaining text truncated at {max_length} characters ...]\n\n{tail}"
+            else:
+                text = (
+                    text[:max_length]
+                    + f"\n\n[... Document truncated at {max_length} characters ...]"
+                )
+        else:
+            text = (
+                text[:max_length]
+                + f"\n\n[... Document truncated at {max_length} characters ...]"
+            )
 
     return text

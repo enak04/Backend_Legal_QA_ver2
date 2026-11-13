@@ -15,6 +15,7 @@ A communication layer in front of an existing legal answer service. It collects 
 9. All user text placed into prompts is wrapped in <user_message> tags and is treated as data, never as instructions.
 10. Prompts live in /prompts as text files, never as inline strings in code.
 11. Every user-facing prompt (talker, confirm_summary, presenter) includes the shared voice from prompts/voice.txt via the {{voice}} placeholder, so the whole conversation sounds like one attentive person. The voice is part of each prompt's version hash.
+12. User feedback (thumbs up/down, reasons, comments) is optional and stored for review only. Like emotion signals, it never changes the case file, the prompts or the query sent to the legal service.
 
 ## Session states
 COLLECTING -> CONFIRMING -> ANSWERED
@@ -51,11 +52,12 @@ COLLECTING -> CONFIRMING -> ANSWERED
 
 ## Data (MongoDB collections)
 - sessions: _id (uuid string), user_id, status, case_file, case_version, language, consent (bool, timestamp), turn_count, asked_counts, safety_flags, last_service_query, last_service_answer, created_at, updated_at
-- messages: session_id, role, text, affect, ts
+- messages: session_id, role, text, affect, meta, ts. For assistant messages, meta records what produced it: kind (question / recap / answer / quick_answer / followup / safety / service_error), prompt_name, prompt_version, presenter_path, status, turn
+- feedback: session_id, target (message | conversation), message_id, rating (up | down), reasons, comment (PII-redacted), snapshot (rated text + its meta), created_at, updated_at, ts. One entry per (session, target, message); re-rating overwrites. Deleted with the session; TTL on ts
 - case_versions: session_id, version, patch, full_case, ts
 - llm_logs: session_id, prompt_name, prompt_version, model, input_chars, output, latency_ms, tokens_in, tokens_out, success, error, ts
 - service_calls: session_id, request, response, latency_ms, status, ts
-TTL indexes on messages, llm_logs and service_calls (SESSION_TTL_DAYS).
+TTL indexes on messages, llm_logs, service_calls and feedback (SESSION_TTL_DAYS).
 
 ## Failure policy
 - LLM timeout or invalid output after one retry: reply with a short apology and ask the user to repeat or rephrase. Keep the session intact.

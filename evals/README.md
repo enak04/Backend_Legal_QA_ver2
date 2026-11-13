@@ -146,3 +146,17 @@ Evaluations use a dual-tier model architecture to balance quality and cost:
 - **FAST tier calls**: ~280 calls (~200k tokens)
 - **Estimated total cost**: **~$0.50 – $1.20 per full 20-persona evaluation run**.
 - When running in test/offline mode (`PROVIDER=fake`), evaluations run with zero API costs.
+
+---
+
+## Real-User Feedback Report
+
+Simulated personas only go so far. `evals/feedback_report.py` summarises the optional thumbs up/down feedback from real users:
+
+```bash
+python evals/feedback_report.py              # everything stored (feedback expires after SESSION_TTL_DAYS)
+python evals/feedback_report.py --days 7     # last 7 days
+python evals/feedback_report.py --export disliked.jsonl
+```
+
+It shows the dislike rate per message kind and **per prompt version**, so you can see whether a prompt change helped. It also lists the top reasons and the latest comments. The export gives each disliked message with the preceding messages, which is raw material for new personas in `evals/personas/` or for prompt fixes.

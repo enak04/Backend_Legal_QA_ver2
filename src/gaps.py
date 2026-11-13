@@ -83,18 +83,43 @@ async def find_gaps(
     # Ensure hard-core jurisdiction is prioritized if missing and not already asked twice
     has_jurisdiction = bool(case.hard_core.jurisdiction and case.hard_core.jurisdiction.strip())
     if not has_jurisdiction:
-        times_asked_jur = asked_counts.get("Location / Jurisdiction", 0)
-        if times_asked_jur < 2 and not any("location" in g.topic.lower() or "jurisdiction" in g.topic.lower() for g in gap_analysis.gaps):
-            gap_analysis.gaps.insert(
-                0,
-                Gap(
-                    topic="Location / Jurisdiction",
-                    question_hint="Where is this happening — which city and state?",
-                    why_it_matters="Rules differ from state to state, so this can change the answer.",
-                    impact="high",
-                    example_answer="Pune, Maharashtra",
-                    can_skip=False,
-                ),
-            )
+        if location_asked_count(asked_counts) < 2 and not any(is_location_topic(g.topic) for g in gap_analysis.gaps):
+            gap_analysis.gaps.insert(0, location_gap())
 
     return gap_analysis
+
+
+LOCATION_GAP_TOPIC = "Location / Jurisdiction"
+GOAL_GAP_TOPIC = "Desired outcome"
+
+
+def is_location_topic(topic: str) -> bool:
+    t = topic.lower()
+    return "location" in t or "jurisdiction" in t
+
+
+def location_asked_count(asked_counts: dict[str, int]) -> int:
+    """How often the location was asked, under any topic name the gap analyzer used."""
+    return sum(n for topic, n in (asked_counts or {}).items() if is_location_topic(topic))
+
+
+def location_gap() -> Gap:
+    return Gap(
+        topic=LOCATION_GAP_TOPIC,
+        question_hint="Where is this happening — which city and state?",
+        why_it_matters="Rules differ from state to state, so this can change the answer.",
+        impact="high",
+        example_answer="Pune, Maharashtra",
+        can_skip=False,
+    )
+
+
+def goal_gap() -> Gap:
+    return Gap(
+        topic=GOAL_GAP_TOPIC,
+        question_hint="What would a good outcome look like for you?",
+        why_it_matters="It tells us what to focus the answer on.",
+        impact="high",
+        example_answer="Getting my full severance pay",
+        can_skip=True,
+    )

@@ -8,9 +8,9 @@ Defines all structured data models for:
 """
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Source(str, Enum):
@@ -321,6 +321,28 @@ class ServiceResponse(BaseModel):
     sections: dict[str, str] | None = None  # e.g. summary, next_steps, caveats
     missing_info: list[str] = Field(default_factory=list)
     citations: list[str] = Field(default_factory=list)
+
+
+class FeedbackRequest(BaseModel):
+    """Optional user feedback on one bot message or on the whole conversation."""
+    target: Literal["message", "conversation"] = "message"
+    message_id: str | None = None
+    rating: Literal["up", "down"]
+    reasons: list[str] = Field(default_factory=list, max_length=5)
+    comment: str = Field(default="", max_length=1000)
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def strip_comment(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+    @model_validator(mode="after")
+    def message_id_required_for_messages(self) -> "FeedbackRequest":
+        if self.target == "message" and not (self.message_id and self.message_id.strip()):
+            raise ValueError("message_id is required when target is 'message'")
+        if self.target == "conversation":
+            self.message_id = None
+        return self
 
 
 class FaithfulnessReport(BaseModel):

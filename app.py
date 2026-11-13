@@ -24,11 +24,19 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_settings
-from src.db import create_session, delete_session, get_all_messages, get_recent_messages, get_session
+from src.db import (
+    create_session,
+    delete_session,
+    get_all_messages,
+    get_feedback_for_session,
+    get_recent_messages,
+    get_session,
+)
+from src.feedback import FEEDBACK_REASONS, FeedbackError, SessionNotFound, feedback_by_message, record_feedback
 from src.llm import BaseLLM, FakeLLM, LLM
 from src.messages import DISCLAIMER, PRIVACY_NOTICE, WELCOME
 from src.pipeline import handle_turn
-from src.schemas import AffectReading, CasePatch, GapAnalysis, Intent, NewFact, UnderstandOutput
+from src.schemas import AffectReading, CasePatch, FeedbackRequest, GapAnalysis, Intent, NewFact, UnderstandOutput
 
 
 app = FastAPI(
@@ -274,12 +282,20 @@ async def post_message_stream(session_id: str, request: Request):
                 final_status = updated_session.get("status", "COLLECTING")
                 yield f"event: status\ndata: {json.dumps({'status': final_status.lower()})}\n\n"
 
-                # 6. Retrieve latest message ID from database
+                # 6. Retrieve latest message ID (and what produced it, for optional feedback)
                 recent = await get_recent_messages(session_id=session_id, n=1)
                 msg_id = str(recent[0]["_id"]) if recent else ""
+                msg_kind = ((recent[0].get("meta") or {}).get("kind", "")) if recent else ""
 
                 # 7. Final done event
-                yield f"event: done\ndata: {json.dumps({'reply': final_reply, 'text': final_reply, 'status': final_status, 'message_id': msg_id})}\n\n"
+                done_payload = {
+                    "reply": final_reply,
+                    "text": final_reply,
+                    "status": final_status,
+                    "message_id": msg_id,
+                    "message_kind": msg_kind,
+                }
+                yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
 
             except Exception as e:
                 yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
@@ -299,11 +315,14 @@ async def get_session_endpoint(session_id: str) -> dict[str, Any]:
 
     current_settings = get_settings()
     raw_messages = await get_all_messages(session_id)
+    ratings = feedback_by_message(await get_feedback_for_session(session_id))
     formatted_messages = [
         {
             "id": str(m["_id"]),
             "role": m.get("role", ""),
             "text": m.get("text", ""),
+            "kind": (m.get("meta") or {}).get("kind"),
+            "feedback": ratings.get(str(m["_id"])),
             "timestamp": m["ts"].isoformat() if isinstance(m.get("ts"), datetime) else str(m.get("ts", "")),
         }
         for m in raw_messages
@@ -323,6 +342,27 @@ async def get_session_endpoint(session_id: str) -> dict[str, Any]:
         response_data["case_version"] = session.get("case_version", 0)
 
     return response_data
+
+
+@app.post("/sessions/{session_id}/feedback", dependencies=[Depends(verify_api_key)], status_code=status.HTTP_201_CREATED)
+async def post_feedback_endpoint(session_id: str, req: FeedbackRequest) -> dict[str, Any]:
+    """
+    Optional feedback on one assistant message (target='message', message_id) or the whole
+    conversation (target='conversation'). Re-posting overwrites the previous rating.
+    Stored for review only; it never affects the conversation.
+    """
+    try:
+        return await record_feedback(session_id, req)
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    except FeedbackError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.get("/sessions/{session_id}/feedback/options", dependencies=[Depends(verify_api_key)])
+async def feedback_options_endpoint(session_id: str) -> dict[str, list[str]]:
+    """Suggested reason chips per message kind ('up' = reasons for a thumbs-up)."""
+    return FEEDBACK_REASONS
 
 
 @app.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(verify_api_key)])

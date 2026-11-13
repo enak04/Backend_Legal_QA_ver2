@@ -33,10 +33,13 @@ from src.db import (
     delete_session,
     get_all_messages,
     get_db,
+    get_feedback_for_session,
     get_session,
     update_session,
 )
+from src.feedback import FEEDBACK_REASONS, FeedbackError, SessionNotFound, feedback_by_message, record_feedback
 from src.pipeline import handle_turn
+from src.schemas import FeedbackRequest
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +121,11 @@ def build_conversation_turn_response(
     compact_state = format_compact_case_state(session)
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    # Latest assistant message: lets the frontend attach optional feedback buttons to this reply
+    last_bot = next((m for m in reversed(session.get("messages") or []) if m.get("role") == "assistant"), None)
+    message_id = str(last_bot["_id"]) if last_bot else ""
+    message_kind = ((last_bot.get("meta") or {}).get("kind", "")) if last_bot else ""
+
     if curr_status == "ANSWERED":
         # Final answer turn
         qa_raw = session.get("last_service_answer") or {}
@@ -145,6 +153,8 @@ def build_conversation_turn_response(
             "reasoning_chain": reasoning_chain,
             "sources": sources,
             "authorities": authorities,
+            "message_id": message_id,
+            "message_kind": message_kind,
             "timestamp": now_iso,
         }
     else:
@@ -160,6 +170,8 @@ def build_conversation_turn_response(
             "answer": reply_text,
             "case_state": compact_state,
             "compact_case_state": compact_state,
+            "message_id": message_id,
+            "message_kind": message_kind,
             "timestamp": now_iso,
         }
 
@@ -263,8 +275,12 @@ async def get_conversation_endpoint(conversation_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
 
     raw_messages = await get_all_messages(conversation_id)
+    ratings = feedback_by_message(await get_feedback_for_session(conversation_id))
     formatted_messages = [
         {
+            "id": str(m.get("_id", "")),
+            "kind": (m.get("meta") or {}).get("kind"),
+            "feedback": ratings.get(str(m.get("_id", ""))),
             "role": m.get("role", ""),
             "content": m.get("text", ""),
             "text": m.get("text", ""),
@@ -307,6 +323,28 @@ async def get_conversation_endpoint(conversation_id: str) -> dict[str, Any]:
         "created_at": created.isoformat() if isinstance(created, datetime) else str(created or ""),
         "updated_at": updated.isoformat() if isinstance(updated, datetime) else str(updated or ""),
     }
+
+
+@router.post("/conversations/{conversation_id}/feedback", status_code=201)
+@router.post("/api/conversations/{conversation_id}/feedback", status_code=201)
+async def conversation_feedback_endpoint(conversation_id: str, req: FeedbackRequest) -> dict[str, Any]:
+    """
+    Optional feedback on one assistant message (target='message', message_id from the turn
+    response) or the whole conversation (target='conversation'). Re-posting overwrites.
+    """
+    try:
+        return await record_feedback(conversation_id, req)
+    except SessionNotFound:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    except FeedbackError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/feedback/options")
+@router.get("/api/feedback/options")
+async def compat_feedback_options() -> dict[str, list[str]]:
+    """Suggested reason chips per message kind ('up' = reasons for a thumbs-up)."""
+    return FEEDBACK_REASONS
 
 
 @router.delete("/conversations/{conversation_id}")

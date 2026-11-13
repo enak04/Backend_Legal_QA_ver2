@@ -135,6 +135,32 @@ Update your `.env` file with:
 | `tests/test_gaps.py` | Tests for gap analyzer prompt execution and pending service gap injection. |
 | `tests/test_readiness.py` | Tests for readiness truth table, hard core constraints, and asked_counts logic. |
 | `tests/test_tenancy_simulation.py` | Multi-turn tenancy dispute conversation reaching READY_FOR_CONFIRMATION within 4-8 turns. |
+| `src/feedback.py` | Records optional user feedback (thumbs up/down, reasons, comment) on a bot message or a whole conversation. |
+| `evals/feedback_report.py` | Summarises feedback by message kind and prompt version, and exports disliked messages with context. |
+| `tests/test_feedback.py` | Tests for feedback endpoints, message metadata, redaction, deletion and the report. |
+| `tests/test_no_dead_end.py` | Tests that the bot never gets stuck with nothing to ask and no recap. |
 | `tests/test_conversational.py` | Tests for the human-like conversation layer: shared voice, confirmation detection, mid-conversation questions, once-only disclaimer, guarded follow-ups and safety lead-ins. |
 | `tests/test_confirm_service_presenter.py` | Tests for confirmation, service call, presenter guards, faithfulness checks, and state transitions. |
 
+
+---
+
+## Optional User Feedback
+
+Users can rate any bot message or the whole conversation. It is never required. The built-in page shows small 👍 👎 buttons under each reply, an optional "Tell us more" panel with reason chips and a comment box, and a dismissible "How was this conversation?" card after the first answer. Feedback is stored for review only and never changes the conversation.
+
+**Endpoints** (same body for both):
+- Built-in page: `POST /sessions/{session_id}/feedback` (needs `X-API-Key`)
+- External frontend: `POST /api/conversations/{conversation_id}/feedback`
+
+```json
+{ "target": "message", "message_id": "<id>", "rating": "down",
+  "reasons": ["Too many questions"], "comment": "optional, max 1000 chars" }
+```
+- `target`: `"message"` (needs `message_id`) or `"conversation"` (no `message_id`).
+- `rating`: `"up"` or `"down"`. Posting again for the same message overwrites the earlier rating.
+- `reasons`: optional, up to 5, from `GET /api/feedback/options` (or `/sessions/{id}/feedback/options`), keyed by message kind (`question`, `recap`, `answer`, `quick_answer`, `followup`, `conversation`, and `up` for thumbs-up).
+- Where to get `message_id` / `message_kind`: the `done` SSE event (`/sessions`) or the turn response (`/api/conversations`). Conversation history responses include each message's `id`, `kind` and current `feedback`.
+- Don't show rating buttons on `safety` or `service_error` messages.
+
+**Review it:** `python evals/feedback_report.py --days 7`. Add `--export disliked.jsonl` to export disliked messages with the conversation leading up to them.

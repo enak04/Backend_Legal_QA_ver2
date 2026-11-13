@@ -49,7 +49,7 @@ def _convert_dates(doc: dict) -> dict:
 def _persist_mock_if_needed(target_db: Database) -> None:
     if getattr(target_db, "_is_mock_persistence", False):
         try:
-            collections = ["sessions", "messages", "case_versions", "llm_logs", "service_calls"]
+            collections = ["sessions", "messages", "case_versions", "llm_logs", "service_calls", "feedback"]
             data = {}
             for col_name in collections:
                 data[col_name] = list(target_db[col_name].find({}))
@@ -140,6 +140,13 @@ def init_db(db: Database, ttl_days: int = 30) -> None:
     # service_calls
     db.service_calls.create_index("ts", expireAfterSeconds=ttl_seconds)
 
+    # feedback: one rating per (session, target, message); expires with the session data
+    db.feedback.create_index(
+        [("session_id", pymongo.ASCENDING), ("target", pymongo.ASCENDING), ("message_id", pymongo.ASCENDING)],
+        unique=True,
+    )
+    db.feedback.create_index("ts", expireAfterSeconds=ttl_seconds)
+
     # Migrate any existing sessions without embedded messages
     _migrate_embed_messages_sync(db)
 
@@ -225,6 +232,7 @@ def _add_message_sync(
     text: str,
     affect: dict | None = None,
     db: Database | None = None,
+    meta: dict | None = None,
 ) -> dict:
     target_db = db or get_db()
     now = datetime.now(UTC)
@@ -236,6 +244,9 @@ def _add_message_sync(
         "affect": affect or {},
         "ts": now,
     }
+    if meta:
+        # What produced this message (kind, prompt name/version, presenter path) - used to make feedback actionable
+        msg_doc["meta"] = meta
     # Embed message directly into the session document
     target_db.sessions.update_one(
         {"_id": session_id},
@@ -278,6 +289,7 @@ def _delete_session_sync(session_id: str, db: Database | None = None) -> bool:
     target_db.case_versions.delete_many({"session_id": session_id})
     target_db.llm_logs.delete_many({"session_id": session_id})
     target_db.service_calls.delete_many({"session_id": session_id})
+    target_db.feedback.delete_many({"session_id": session_id})
     _persist_mock_if_needed(target_db)
     return True
 
@@ -364,6 +376,46 @@ def _log_service_call_sync(
     return call_doc
 
 
+def _upsert_feedback_sync(
+    session_id: str,
+    target: str,
+    message_id: str | None,
+    rating: str,
+    reasons: list[str],
+    comment: str,
+    snapshot: dict,
+    db: Database | None = None,
+) -> dict:
+    target_db = db or get_db()
+    now = datetime.now(UTC)
+    key = {"session_id": session_id, "target": target, "message_id": message_id}
+    existing = target_db.feedback.find_one(key)
+    doc = {
+        **key,
+        "rating": rating,
+        "reasons": reasons,
+        "comment": comment,
+        "snapshot": snapshot,
+        "updated_at": now,
+        "ts": now,
+    }
+    if existing:
+        target_db.feedback.update_one({"_id": existing["_id"]}, {"$set": doc})
+        doc["_id"] = existing["_id"]
+        doc["created_at"] = existing.get("created_at", now)
+    else:
+        doc["_id"] = str(uuid.uuid4())
+        doc["created_at"] = now
+        target_db.feedback.insert_one(doc)
+    _persist_mock_if_needed(target_db)
+    return doc
+
+
+def _get_feedback_for_session_sync(session_id: str, db: Database | None = None) -> list[dict]:
+    target_db = db or get_db()
+    return list(target_db.feedback.find({"session_id": session_id}))
+
+
 # ---------------------------------------------------------------------------
 # Async wrappers via asyncio.to_thread
 # ---------------------------------------------------------------------------
@@ -404,6 +456,7 @@ async def add_message(
     text: str,
     affect: dict | None = None,
     db: Database | None = None,
+    meta: dict | None = None,
 ) -> dict:
     """Async wrapper to insert a message into the messages collection."""
     return await asyncio.to_thread(
@@ -413,6 +466,7 @@ async def add_message(
         text=text,
         affect=affect,
         db=db,
+        meta=meta,
     )
 
 
@@ -494,6 +548,35 @@ async def log_service_call(
 async def get_all_messages(session_id: str, db: Database | None = None) -> list[dict]:
     """Async wrapper to get all messages for a session in chronological order."""
     return await asyncio.to_thread(_get_all_messages_sync, session_id=session_id, db=db)
+
+
+async def upsert_feedback(
+    session_id: str,
+    target: str,
+    message_id: str | None,
+    rating: str,
+    reasons: list[str],
+    comment: str,
+    snapshot: dict,
+    db: Database | None = None,
+) -> dict:
+    """Async wrapper to create or overwrite one feedback entry per (session, target, message)."""
+    return await asyncio.to_thread(
+        _upsert_feedback_sync,
+        session_id=session_id,
+        target=target,
+        message_id=message_id,
+        rating=rating,
+        reasons=reasons,
+        comment=comment,
+        snapshot=snapshot,
+        db=db,
+    )
+
+
+async def get_feedback_for_session(session_id: str, db: Database | None = None) -> list[dict]:
+    """Async wrapper to list all feedback entries for a session."""
+    return await asyncio.to_thread(_get_feedback_for_session_sync, session_id=session_id, db=db)
 
 
 async def delete_session(session_id: str, db: Database | None = None) -> bool:

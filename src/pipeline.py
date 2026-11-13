@@ -34,10 +34,11 @@ from src.case_ops import apply_patch, render_case_summary
 from src.config import get_settings
 from src.confirm import build_quick_question_query, build_service_query, make_recap
 from src.db import add_message, get_recent_messages, save_case_version, update_session
-from src.gaps import find_gaps
+from src.gaps import GOAL_GAP_TOPIC, find_gaps, goal_gap, location_asked_count, location_gap
 from src.llm import LLM, BaseLLM
 from src.messages import SERVICE_ERROR_REPLY
 from src.presenter import present
+from src.prompts import load_prompt
 from src.readiness import describe_progress, filter_gaps_to_ask, is_ready, track_asked_gap
 from src.safety import SAFETY_FOLLOW_UP_NOTES, decide, detect_keywords, is_safe_confirmation
 from src.schemas import CaseFile, Gap, Intent, SafetyDecision, ServiceResponse, UnderstandOutput
@@ -45,7 +46,7 @@ from src.service_client import ServiceClient
 from src.talker import build_talker_reply
 from src.understand import understand
 
-LOCATION_GAP_TOPIC = "Location / Jurisdiction"
+LOCATION_ASSUMPTION = "Location not given, so the answer is general rather than for a specific state"
 
 SAFETY_ALREADY_SHOWN_NOTE = "A safety message was shown earlier in this conversation. Do not repeat it."
 
@@ -128,16 +129,19 @@ def is_done_signal(message: str, turn_num: int) -> bool:
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _async_string_stream(text: str, session_id: str, affect_dict: dict) -> AsyncGenerator[str, None]:
+async def _async_string_stream(
+    text: str, session_id: str, affect_dict: dict, meta: dict | None = None
+) -> AsyncGenerator[str, None]:
     """Yields a canned/hard-coded string as an async stream and logs it to DB."""
     yield text
-    await add_message(session_id=session_id, role="assistant", text=text, affect=affect_dict)
+    await add_message(session_id=session_id, role="assistant", text=text, affect=affect_dict, meta=meta)
 
 
 async def _stream_and_save(
     stream_gen: AsyncGenerator[str, None],
     session_id: str,
     affect_dict: dict,
+    meta: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """Wraps an LLM stream to yield chunks and saves full assistant response upon completion."""
     collected: list[str] = []
@@ -145,7 +149,28 @@ async def _stream_and_save(
         collected.append(chunk)
         yield chunk
     full_text = "".join(collected)
-    await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_dict)
+    await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_dict, meta=meta)
+
+
+def _meta(kind: str, prompt_name: str | None = None, session: dict | None = None) -> dict:
+    """
+    Describes what produced an assistant message, so user feedback can be traced to it:
+    kind (question / recap / answer / quick_answer / followup / safety / service_error),
+    the prompt name and version, the presenter path, and the session status/turn.
+    """
+    meta: dict = {"kind": kind}
+    if prompt_name:
+        meta["prompt_name"] = prompt_name
+        try:
+            meta["prompt_version"] = load_prompt(prompt_name)[1]
+        except Exception:
+            meta["prompt_version"] = "unknown"
+    if session is not None:
+        meta["status"] = session.get("status", "COLLECTING")
+        meta["turn"] = session.get("turn_count", 0)
+        if prompt_name == "presenter":
+            meta["presenter_path"] = session.get("last_presenter_path")
+    return meta
 
 
 def _presenter_state(session: dict) -> dict:
@@ -178,6 +203,34 @@ def _safety_notes(session: dict, user_message: str) -> list[str]:
     elif session.get("safety_flags"):
         notes.append(SAFETY_ALREADY_SHOWN_NOTE)
     return notes
+
+
+def resolve_dead_end(session: dict, case: CaseFile, to_ask: list[Gap]) -> tuple[list[Gap], bool]:
+    """
+    Called when the case is not ready but there is nothing left to ask (or the person says
+    they're done). The bot must never sit in that state, because the talker would then
+    improvise a wrap-up instead of moving on. Returns (gaps_to_ask, ready):
+    - location missing: ask for it (unless asked twice already, then assume "General")
+    - goal missing: ask for it (unless asked twice already, then use a neutral default)
+    - otherwise: ready for the recap
+    Existing questions in to_ask are kept; a core question is only added when to_ask is empty.
+    """
+    counts = session.get("asked_counts", {}) or {}
+    hc = case.hard_core
+
+    if not (hc.jurisdiction and hc.jurisdiction.strip()):
+        if location_asked_count(counts) < 2:
+            return (to_ask or [location_gap()]), False
+        hc.jurisdiction = "General"
+        if LOCATION_ASSUMPTION not in case.assumptions:
+            case.assumptions.append(LOCATION_ASSUMPTION)
+
+    if not (hc.user_goal and hc.user_goal.strip()):
+        if counts.get(GOAL_GAP_TOPIC, 0) < 2:
+            return (to_ask or [goal_gap()]), False
+        hc.user_goal = "Understand their rights and options"
+
+    return to_ask, True
 
 
 def _defer_question_note(question: str, next_gap: Gap | None) -> str:
@@ -354,9 +407,11 @@ async def handle_turn(
 
             reply_text = safety_decision.reply_text or ""
             if stream:
-                return _async_string_stream(reply_text, session_id=session_id, affect_dict=affect_out.model_dump()), safety_decision
+                return _async_string_stream(
+                    reply_text, session_id=session_id, affect_dict=affect_out.model_dump(), meta=_meta("safety", session=session)
+                ), safety_decision
             else:
-                await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
+                await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump(), meta=_meta("safety", session=session))
                 return reply_text, safety_decision
 
     # Current state dispatch
@@ -420,7 +475,7 @@ async def handle_turn(
                     "turn_count": turn_num,
                     **_presenter_state(session),
                 })
-                await add_message(session_id=session_id, role="assistant", text=presented_text, affect=affect_out.model_dump())
+                await add_message(session_id=session_id, role="assistant", text=presented_text, affect=affect_out.model_dump(), meta=_meta("answer", "presenter", session))
                 return presented_text, safety_decision
 
             elif service_resp.status == "needs_more_info":
@@ -464,7 +519,7 @@ async def handle_turn(
                     ),
                     progress="Close: just these extra details and then you can get them an answer.",
                 )
-                await add_message(session_id=session_id, role="assistant", text=talker_reply, affect=affect_out.model_dump())
+                await add_message(session_id=session_id, role="assistant", text=talker_reply, affect=affect_out.model_dump(), meta=_meta("question", "talker", session))
                 return talker_reply, safety_decision
 
             else:  # service_resp.status == "error"
@@ -474,7 +529,7 @@ async def handle_turn(
                     "last_service_query": session["last_service_query"],
                     "turn_count": turn_num,
                 })
-                await add_message(session_id=session_id, role="assistant", text=SERVICE_ERROR_REPLY, affect=affect_out.model_dump())
+                await add_message(session_id=session_id, role="assistant", text=SERVICE_ERROR_REPLY, affect=affect_out.model_dump(), meta=_meta("service_error", session=session))
                 return SERVICE_ERROR_REPLY, safety_decision
 
         else:
@@ -499,19 +554,27 @@ async def handle_turn(
                 session=session,
             )
 
-            if ready:
-                recap = await make_recap(session=session, case=updated_case, llm=client)
-                session["status"] = "CONFIRMING"
-                await update_session(session_id=session_id, updates={"status": "CONFIRMING"})
-                await add_message(session_id=session_id, role="assistant", text=recap, affect=affect_out.model_dump())
-                return ReadyConfirmation(recap, safety_decision)
-
             to_ask = filter_gaps_to_ask(
                 session=session,
                 case=updated_case,
                 gaps=gap_analysis.gaps,
                 max_questions=settings.max_questions_per_turn,
             )
+            # Never leave the talker with nothing to ask: ask a missing core detail or recap
+            if not ready and not to_ask:
+                to_ask, ready = resolve_dead_end(session, updated_case, to_ask)
+                session["case_file"] = updated_case.model_dump()
+
+            if ready:
+                recap = await make_recap(session=session, case=updated_case, llm=client)
+                session["status"] = "CONFIRMING"
+                await update_session(session_id=session_id, updates={
+                    "status": "CONFIRMING",
+                    "case_file": session["case_file"],
+                })
+                await add_message(session_id=session_id, role="assistant", text=recap, affect=affect_out.model_dump(), meta=_meta("recap", "confirm_summary", session))
+                return ReadyConfirmation(recap, safety_decision)
+
             for g in to_ask:
                 track_asked_gap(session, g.topic)
 
@@ -531,7 +594,7 @@ async def handle_turn(
                 progress=describe_progress(gap_analysis, turn_num, settings, session),
             )
             await update_session(session_id=session_id, updates={"asked_counts": session.get("asked_counts", {})})
-            await add_message(session_id=session_id, role="assistant", text=reply, affect=affect_out.model_dump())
+            await add_message(session_id=session_id, role="assistant", text=reply, affect=affect_out.model_dump(), meta=_meta("question", "talker", session))
             return reply, safety_decision
 
     # -----------------------------------------------------------------------
@@ -554,7 +617,7 @@ async def handle_turn(
         session["case_file"] = updated_case.model_dump()
         session["case_version"] = updated_case.version
 
-        async def _finish_answered(reply_text: str) -> tuple[str, SafetyDecision]:
+        async def _finish_answered(reply_text: str, meta: dict) -> tuple[str, SafetyDecision]:
             await update_session(session_id=session_id, updates={
                 "case_file": session["case_file"],
                 "case_version": session["case_version"],
@@ -563,7 +626,7 @@ async def handle_turn(
                 "last_service_answer": session.get("last_service_answer"),
                 **_presenter_state(session),
             })
-            await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump())
+            await add_message(session_id=session_id, role="assistant", text=reply_text, affect=affect_out.model_dump(), meta=meta)
             return reply_text, safety_decision
 
         # Explicit request for a recap of the case notes
@@ -573,7 +636,10 @@ async def handle_turn(
             or (understand_out.intent == Intent.asks_about_process and any(w in msg_lower for w in ["summary", "recap", "notes"]))
         )
         if is_requesting_recap:
-            return await _finish_answered(await make_recap(session=session, case=updated_case, llm=client))
+            return await _finish_answered(
+                await make_recap(session=session, case=updated_case, llm=client),
+                _meta("recap", "confirm_summary", session),
+            )
 
         # A new legal question -> ask the legal service rather than improvising
         if understand_out.intent == Intent.asks_legal_question and understand_out.question.strip():
@@ -586,7 +652,7 @@ async def handle_turn(
                 user_message=user_message,
             )
             if quick_reply:
-                return await _finish_answered(quick_reply)
+                return await _finish_answered(quick_reply, _meta("quick_answer", "presenter", session))
 
         # New documents -> refresh the main answer with the updated case
         has_new_documents = any(d.state.value == "has" for d in understand_out.patch.add_documents)
@@ -603,7 +669,7 @@ async def handle_turn(
                     new_message=user_message,
                     llm=client,
                 )
-                return await _finish_answered(refreshed)
+                return await _finish_answered(refreshed, _meta("answer", "presenter", session))
 
         # Follow-up about the stored answer (guarded)
         stored_raw = session.get("last_service_answer")
@@ -619,7 +685,7 @@ async def handle_turn(
             new_message=user_message,
             llm=client,
         )
-        return await _finish_answered(followup_reply)
+        return await _finish_answered(followup_reply, _meta("followup", "presenter", session))
 
     # -----------------------------------------------------------------------
     # STATE: COLLECTING (Default)
@@ -662,19 +728,11 @@ async def handle_turn(
         max_questions=settings.max_questions_per_turn,
     )
 
-    # If the user has nothing else to add, or no gaps remain to ask, move to confirmation.
-    # The location is only assumed after it has been asked twice without an answer.
+    # If the user has nothing else to add, or no gaps remain to ask: ask for a missing core
+    # detail (location / goal) or move to confirmation. Never leave the talker with nothing to ask.
     if (is_user_done or not to_ask) and not ready:
-        has_location = bool(updated_case.hard_core.jurisdiction and updated_case.hard_core.jurisdiction.strip())
-        location_asked = session.get("asked_counts", {}).get(LOCATION_GAP_TOPIC, 0)
-        if has_location or location_asked >= 2:
-            if not has_location:
-                updated_case.hard_core.jurisdiction = "General"
-                if "Location not given, so the answer is general rather than for a specific state" not in updated_case.assumptions:
-                    updated_case.assumptions.append("Location not given, so the answer is general rather than for a specific state")
-            if not (updated_case.hard_core.user_goal and updated_case.hard_core.user_goal.strip()):
-                updated_case.hard_core.user_goal = "Understand their rights and options"
-            ready = True
+        to_ask, ready = resolve_dead_end(session, updated_case, [] if is_user_done else to_ask)
+        if ready:
             ready_reason = "No further gaps to ask or user completed input"
 
     if debug:
@@ -695,7 +753,7 @@ async def handle_turn(
             "turn_count": turn_num,
             "asked_counts": session.get("asked_counts", {}),
         })
-        await add_message(session_id=session_id, role="assistant", text=recap_text, affect=affect_out.model_dump())
+        await add_message(session_id=session_id, role="assistant", text=recap_text, affect=affect_out.model_dump(), meta=_meta("recap", "confirm_summary", session))
         return ReadyConfirmation(recap_text, safety_decision)
 
     next_gap = to_ask[0] if to_ask else None
@@ -724,7 +782,7 @@ async def handle_turn(
                 "safety_followup_pending": None,
                 **_presenter_state(session),
             })
-            await add_message(session_id=session_id, role="assistant", text=quick_reply, affect=affect_out.model_dump())
+            await add_message(session_id=session_id, role="assistant", text=quick_reply, affect=affect_out.model_dump(), meta=_meta("quick_answer", "presenter", session))
             return quick_reply, safety_decision
 
     # Otherwise talker writes the reply (SMART_MODEL)
@@ -766,7 +824,9 @@ async def handle_turn(
             system_notes=system_notes,
             progress=progress,
         )
-        return _stream_and_save(raw_stream, session_id=session_id, affect_dict=affect_out.model_dump()), safety_decision
+        return _stream_and_save(
+            raw_stream, session_id=session_id, affect_dict=affect_out.model_dump(), meta=_meta("question", "talker", session)
+        ), safety_decision
     else:
         full_text = await build_talker_reply(
             session=session,
@@ -780,5 +840,5 @@ async def handle_turn(
             system_notes=system_notes,
             progress=progress,
         )
-        await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_out.model_dump())
+        await add_message(session_id=session_id, role="assistant", text=full_text, affect=affect_out.model_dump(), meta=_meta("question", "talker", session))
         return full_text, safety_decision

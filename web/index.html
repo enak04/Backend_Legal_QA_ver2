@@ -305,6 +305,79 @@
       align-self: flex-end;
     }
 
+    /* Optional feedback (never required, never blocks the chat) */
+    .feedback-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .fb-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-size: 12px;
+      line-height: 1.4;
+      cursor: pointer;
+      opacity: 0.45;
+      filter: grayscale(1);
+      transition: opacity 0.15s ease, filter 0.15s ease;
+    }
+    .fb-btn:hover, .fb-btn:focus-visible { opacity: 0.9; filter: none; }
+    .fb-btn.selected { opacity: 1; filter: none; border-color: var(--border); background: var(--surface-subtle); }
+    .fb-note { margin-left: 6px; font-size: 11px; color: var(--text-muted); }
+    .fb-more {
+      background: none; border: none; padding: 0; margin-left: 6px;
+      font-size: 11px; color: var(--text-muted); text-decoration: underline; cursor: pointer;
+    }
+    .fb-panel {
+      margin-top: 6px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-subtle);
+      max-width: 420px;
+      font-size: 12px;
+      color: var(--text-main);
+    }
+    .fb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .fb-chip {
+      border: 1px solid var(--border); background: #fff; border-radius: 9999px;
+      padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--text-main);
+    }
+    .fb-chip.selected { background: var(--user-bubble); color: #fff; border-color: var(--user-bubble); }
+    .fb-panel textarea {
+      width: 100%; box-sizing: border-box; min-height: 52px; resize: vertical;
+      border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+      font: inherit; font-size: 12px;
+    }
+    .fb-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+    .fb-actions button {
+      border: 1px solid var(--border); background: #fff; border-radius: 6px;
+      padding: 4px 10px; font-size: 12px; cursor: pointer;
+    }
+    .fb-actions .fb-send { background: var(--user-bubble); color: #fff; border-color: var(--user-bubble); }
+    .conversation-feedback {
+      align-self: center;
+      margin: 8px auto;
+      padding: 10px 14px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 460px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .conversation-feedback .cf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .conversation-feedback .cf-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; }
+    .btn-feedback {
+      background: transparent; border: none; color: var(--text-muted);
+      font-size: 13px; text-decoration: underline; cursor: pointer; display: none;
+    }
+
     /* Emergency / Safety Alert Banner */
     .safety-alert {
       background: var(--danger-bg);
@@ -571,6 +644,7 @@
     </div>
     <div class="header-actions">
       <div id="status-pill" class="status-badge">Ready</div>
+      <button id="btn-feedback" class="btn-feedback" title="Tell us how this conversation is going (optional)">Feedback</button>
       <button id="btn-delete" class="btn-delete" title="Permanently delete all conversation records">Delete my data</button>
     </div>
   </header>
@@ -698,6 +772,203 @@
       setTimeout(() => toast.classList.remove("show"), 3500);
     }
 
+    // -----------------------------------------------------------------
+    // Optional feedback. Never required, never blocks typing or sending.
+    // -----------------------------------------------------------------
+    const btnFeedback = document.getElementById("btn-feedback");
+    const NO_FEEDBACK_KINDS = ["safety", "service_error", "welcome"];
+    let feedbackOptions = null;
+    let conversationCardShown = false;
+
+    async function getFeedbackOptions() {
+      if (feedbackOptions || !sessionId) return feedbackOptions || {};
+      try {
+        const res = await fetch(`/sessions/${sessionId}/feedback/options`, { headers: { "X-API-Key": apiKey } });
+        if (res.ok) feedbackOptions = await res.json();
+      } catch { /* chips are optional */ }
+      return feedbackOptions || {};
+    }
+
+    async function sendFeedback(body) {
+      if (!sessionId) return false;
+      try {
+        const res = await fetch(`/sessions/${sessionId}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return true;
+      } catch (err) {
+        showToast("Couldn't save your feedback, but you can keep chatting.");
+        return false;
+      }
+    }
+
+    // Inline "tell us more" panel: reason chips + optional comment
+    function buildDetailsPanel(reasons, onSend, onClose) {
+      const panel = document.createElement("div");
+      panel.className = "fb-panel";
+      const selected = new Set();
+
+      if (reasons && reasons.length) {
+        const chips = document.createElement("div");
+        chips.className = "fb-chips";
+        reasons.forEach((r) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "fb-chip";
+          chip.textContent = r;
+          chip.addEventListener("click", () => {
+            if (selected.has(r)) { selected.delete(r); chip.classList.remove("selected"); }
+            else if (selected.size < 5) { selected.add(r); chip.classList.add("selected"); }
+          });
+          chips.appendChild(chip);
+        });
+        panel.appendChild(chips);
+      }
+
+      const comment = document.createElement("textarea");
+      comment.maxLength = 1000;
+      comment.placeholder = "Anything else? (optional)";
+      panel.appendChild(comment);
+
+      const actions = document.createElement("div");
+      actions.className = "fb-actions";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "Close";
+      close.addEventListener("click", onClose);
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "fb-send";
+      send.textContent = "Send";
+      send.addEventListener("click", () => onSend([...selected], comment.value.trim()));
+      actions.append(close, send);
+      panel.appendChild(actions);
+      return panel;
+    }
+
+    // Thumbs up/down on one assistant message
+    function attachFeedback(bubble, messageId, kind) {
+      if (!bubble || !messageId || NO_FEEDBACK_KINDS.includes(kind)) return;
+      const msgDiv = bubble.parentElement;
+      const meta = msgDiv && msgDiv.querySelector(".message-meta");
+      if (!meta || meta.querySelector(".feedback-row")) return;
+
+      const row = document.createElement("span");
+      row.className = "feedback-row";
+      const up = document.createElement("button");
+      const down = document.createElement("button");
+      [[up, "👍", "up", "This was helpful"], [down, "👎", "down", "This wasn't helpful"]].forEach(([btn, icon, val, label]) => {
+        btn.type = "button";
+        btn.className = "fb-btn";
+        btn.textContent = icon;
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
+        btn.dataset.rating = val;
+      });
+      const note = document.createElement("span");
+      note.className = "fb-note";
+      row.append(up, down, note);
+      meta.appendChild(row);
+
+      let rating = null;
+      let panel = null;
+
+      async function rate(val) {
+        const ok = await sendFeedback({ target: "message", message_id: messageId, rating: val });
+        if (!ok) return;
+        rating = val;
+        up.classList.toggle("selected", val === "up");
+        down.classList.toggle("selected", val === "down");
+        note.textContent = "Thanks for the feedback.";
+        if (panel) { panel.remove(); panel = null; }
+        if (!row.querySelector(".fb-more")) {
+          const more = document.createElement("button");
+          more.type = "button";
+          more.className = "fb-more";
+          more.textContent = "Tell us more (optional)";
+          more.addEventListener("click", openDetails);
+          row.appendChild(more);
+        }
+      }
+
+      async function openDetails() {
+        if (panel || !rating) return;
+        const opts = await getFeedbackOptions();
+        const reasons = rating === "up" ? (opts.up || []) : (opts[kind] || []);
+        panel = buildDetailsPanel(
+          reasons,
+          async (reasons, comment) => {
+            const ok = await sendFeedback({ target: "message", message_id: messageId, rating, reasons, comment });
+            if (ok) { note.textContent = "Thanks, that really helps."; panel.remove(); panel = null; }
+          },
+          () => { panel.remove(); panel = null; },
+        );
+        msgDiv.appendChild(panel);
+      }
+
+      up.addEventListener("click", () => rate("up"));
+      down.addEventListener("click", () => rate("down"));
+    }
+
+    // One dismissible card for the whole conversation
+    function showConversationFeedback() {
+      if (!sessionId || document.getElementById("conversation-feedback")) return;
+      conversationCardShown = true;
+
+      const card = document.createElement("div");
+      card.id = "conversation-feedback";
+      card.className = "conversation-feedback";
+      const head = document.createElement("div");
+      head.className = "cf-head";
+      const label = document.createElement("span");
+      label.textContent = "How was this conversation? (optional)";
+      const btns = document.createElement("span");
+      const up = document.createElement("button");
+      const down = document.createElement("button");
+      [[up, "👍", "up"], [down, "👎", "down"]].forEach(([b, icon, val]) => {
+        b.type = "button"; b.className = "fb-btn"; b.textContent = icon; b.dataset.rating = val;
+        b.setAttribute("aria-label", val === "up" ? "Good conversation" : "Not a good conversation");
+      });
+      const close = document.createElement("button");
+      close.type = "button"; close.className = "cf-close"; close.textContent = "✕"; close.title = "Dismiss";
+      close.addEventListener("click", () => card.remove());
+      btns.append(up, down, close);
+      head.append(label, btns);
+      card.appendChild(head);
+
+      let rating = null;
+      let panel = null;
+      async function rate(val) {
+        const ok = await sendFeedback({ target: "conversation", rating: val });
+        if (!ok) return;
+        rating = val;
+        up.classList.toggle("selected", val === "up");
+        down.classList.toggle("selected", val === "down");
+        label.textContent = "Thanks for the feedback.";
+        if (panel) return;
+        const opts = await getFeedbackOptions();
+        panel = buildDetailsPanel(
+          opts.conversation || [],
+          async (reasons, comment) => {
+            const ok2 = await sendFeedback({ target: "conversation", rating, reasons, comment });
+            if (ok2) { label.textContent = "Thanks, that really helps."; panel.remove(); panel = null; }
+          },
+          () => { panel.remove(); panel = null; },
+        );
+        card.appendChild(panel);
+      }
+      up.addEventListener("click", () => rate("up"));
+      down.addEventListener("click", () => rate("down"));
+
+      messagesList.appendChild(card);
+      messagesList.scrollTop = messagesList.scrollHeight;
+    }
+
+    btnFeedback.addEventListener("click", showConversationFeedback);
+
     // Status Pill Helper
     function updateStatus(status) {
       if (!status) return;
@@ -768,6 +1039,9 @@
         consentScreen.style.display = "none";
         chatScreen.style.display = "flex";
         btnDelete.style.display = "inline-block";
+        btnFeedback.style.display = "inline-block";
+        feedbackOptions = null;
+        conversationCardShown = false;
         updateStatus("collecting");
 
         // Display Welcome message
@@ -968,6 +1242,12 @@
               } else if (assistantBubble && finalTxt && !assistantBubble.textContent.trim()) {
                 assistantBubble.textContent = finalTxt;
               }
+              // Optional feedback buttons on this reply
+              attachFeedback(assistantBubble, dataObj.message_id, dataObj.message_kind);
+              // Offer (once, dismissible) to rate the whole conversation after the first answer
+              if ((dataObj.status || "").toUpperCase() === "ANSWERED" && !conversationCardShown) {
+                showConversationFeedback();
+              }
             } else if (eventName === "error") {
               typingIndicator.style.display = "none";
               showToast("Error from server: " + (dataObj.error || "Unknown"));
@@ -1025,6 +1305,9 @@
           btnDelete.style.display = "none";
           btnDelete.disabled = false;
           btnDelete.textContent = "Delete my data";
+          btnFeedback.style.display = "none";
+          feedbackOptions = null;
+          conversationCardShown = false;
           updateStatus("Ready");
         } else {
           throw new Error(`Deletion returned HTTP ${res.status}`);

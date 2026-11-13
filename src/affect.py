@@ -63,34 +63,41 @@ def affect_to_style_hint(affect: AffectReading) -> str:
     # Distress guidance
     if affect.distress >= 2:
         d_hint = (
-            "The person is distressed. Acknowledge their feelings first in one brief professional phrase. "
-            "Do NOT provide therapy, counseling, or ask about personal support networks; focus strictly on legal facts. "
-            "Ask only ONE gentle, easy question."
+            "The person is upset. Open with a brief, genuine, specific human reaction to what happened to them "
+            "(one sentence, no cliches, no therapy talk), then ask only ONE easy question."
         )
         if affect.distress == 3:
-            d_hint += " Do not ask for dates, documents or amounts this turn."
+            d_hint += " They are overwhelmed: keep it very short and do not ask for dates, documents or amounts this turn."
         hints.append(d_hint)
 
     # Confusion guidance
     if affect.confusion >= 2:
         hints.append(
-            "The person is confused. Explain why you are asking and give a simple example answer."
+            "The person is confused. Use the simplest words, say briefly why you are asking, and give a small example answer."
         )
 
     # Anger guidance
     if affect.anger >= 2:
         hints.append(
-            "The person is angry. Let them feel heard in one sentence, do not argue, then steer to the facts."
+            "The person is angry. Show in one sentence that you get why they are angry, without arguing or "
+            "over-apologising, then move to the facts."
         )
 
     # Shame guidance
     if affect.shame >= 2:
         hints.append(
-            "The person feels ashamed. Be non-judgmental and normalize asking for help."
+            "The person feels embarrassed or blames themselves. Be matter-of-fact and non-judgmental; "
+            "make it clear this kind of thing happens to lots of people."
+        )
+
+    # Urgency guidance
+    if affect.urgency >= 3:
+        hints.append(
+            "Something is happening right now or within days. Be brisk and focused, and prioritise what is needed to help fast."
         )
 
     # Base style
-    base_text = " ".join(hints) if hints else "Neutral and friendly."
+    base_text = " ".join(hints) if hints else "Relaxed, friendly and natural."
 
     # Append style note if provided by the model
     if affect.style_note:

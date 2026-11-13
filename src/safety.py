@@ -49,20 +49,37 @@ def _resolve_language_key(language_str: str) -> str:
 
 
 def get_helpline_reply(category: str, language: str = "English") -> str:
-    """Retrieves the pre-approved helpline text message for a category and language."""
+    """
+    Retrieves the pre-approved helpline text for a category and language.
+    If the category has a reviewed 'lead_in' line, it is placed before the message so the
+    reply reads like a person responding, while the reviewed message itself stays verbatim.
+    """
     config = get_helplines_config()
     categories = config.get("categories", {})
     cat_data = categories.get(category, {})
     messages = cat_data.get("messages", {})
+    lead_ins = cat_data.get("lead_in", {})
 
     lang_key = _resolve_language_key(language)
-    reply = messages.get(lang_key) or messages.get("en")
+    # Use one language for both lead-in and message (falling back to English together)
+    msg_lang = lang_key if messages.get(lang_key) else "en"
+    reply = messages.get(msg_lang)
     if not reply:
         return (
             "If you are in immediate danger or distress, "
             "please contact emergency services or a local crisis line immediately."
         )
-    return reply
+    lead_in = lead_ins.get(msg_lang)
+    return f"{lead_in} {reply}" if lead_in else reply
+
+
+# Next-turn guidance for the talker after a safety message, so it follows up like a person would
+SAFETY_FOLLOW_UP_NOTES: dict[str, str] = {
+    "self_harm": "Earlier you shared crisis support details because they mentioned wanting to harm themselves. Before anything legal, check gently and briefly whether they are safe right now. Do not repeat the helpline details.",
+    "violence_abuse": "Earlier you shared safety contacts because they may be in danger from someone. Check briefly whether they are somewhere safe right now, then carry on with their situation. Do not repeat the helpline details.",
+    "child_safety": "Earlier you shared child-safety contacts. Check briefly whether the child is safe right now, then carry on. Do not repeat the helpline details.",
+    "arrest_detention": "Earlier you shared legal-aid contacts because someone has been arrested or detained. Carry on helping with the situation; useful next things are who was detained and where they are being held. Do not repeat the helpline details.",
+}
 
 
 # ---------------------------------------------------------------------------

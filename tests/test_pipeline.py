@@ -12,7 +12,8 @@ import pytest
 
 from src.db import create_session, get_recent_messages, get_session
 from src.llm import FakeLLM
-from src.pipeline import handle_turn
+from src.pipeline import SAFETY_ALREADY_SHOWN_NOTE, handle_turn
+from src.safety import SAFETY_FOLLOW_UP_NOTES
 from src.schemas import AffectReading, CasePatch, Intent, NewFact, Source, UnderstandOutput
 
 
@@ -73,9 +74,10 @@ async def test_pipeline_next_turn_after_safety_injects_system_note():
         "talker": "I am here with you. What else happened with your apartment?",
     })
 
-    # Create session with existing safety flag
+    # Create session where a self-harm safety message was just shown
     session = await create_session()
     session["safety_flags"] = ["self_harm"]
+    session["safety_followup_pending"] = "self_harm"
 
     reply, decision = await handle_turn(
         session=session,
@@ -90,9 +92,53 @@ async def test_pipeline_next_turn_after_safety_injects_system_note():
     talker_calls = [c for c in fake.call_history if c["prompt_name"] == "talker"]
     assert len(talker_calls) == 1
 
-    # Verify that the system prompt sent to talker contains the warning
+    # Immediately after: a category-specific, human follow-up note that forbids repeating the helpline
     talker_system_prompt = talker_calls[0]["system"]
-    assert "A safety message was already shown. Check in gently and do not repeat it." in talker_system_prompt
+    assert SAFETY_FOLLOW_UP_NOTES["self_harm"] in talker_system_prompt
+    assert "Do not repeat the helpline details." in talker_system_prompt
+
+    # The follow-up is consumed: the next turn only carries the light "don't repeat it" note
+    updated = await get_session(session["_id"])
+    assert updated.get("safety_followup_pending") is None
+    assert "safety_followup_pending" not in session
+    fake.call_history.clear()
+    await handle_turn(session=session, user_message="He wants me out by Friday", llm=fake, stream=False)
+    second_prompt = [c for c in fake.call_history if c["prompt_name"] == "talker"][0]["system"]
+    assert SAFETY_ALREADY_SHOWN_NOTE in second_prompt
+    assert SAFETY_FOLLOW_UP_NOTES["self_harm"] not in second_prompt
+
+
+@pytest.mark.asyncio
+async def test_pipeline_safety_message_sets_followup_pending():
+    """A newly triggered safety message marks the category for a human follow-up on the next turn."""
+    fake = FakeLLM(responses={
+        "extractor": UnderstandOutput(intent=Intent.provides_info, patch=CasePatch()),
+        "affect": AffectReading(distress=2, crisis_detention=True),
+    })
+    session = await create_session()
+    reply, decision = await handle_turn(
+        session=session,
+        user_message="The police arrested my brother last night",
+        llm=fake,
+        stream=False,
+    )
+    assert decision.category == "arrest_detention"
+    updated = await get_session(session["_id"])
+    assert updated["safety_followup_pending"] == "arrest_detention"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_stores_style_hint():
+    """The affect-derived style hint is saved on the session so the presenter can use it."""
+    fake = FakeLLM(responses={
+        "extractor": UnderstandOutput(intent=Intent.provides_info, patch=CasePatch()),
+        "affect": AffectReading(anger=3),
+        "talker": "That would make anyone furious. Where is the flat?",
+    })
+    session = await create_session()
+    await handle_turn(session=session, user_message="My landlord kept my deposit for no reason!", llm=fake, stream=False)
+    updated = await get_session(session["_id"])
+    assert "The person is angry." in updated["style_hint"]
 
 
 @pytest.mark.asyncio
@@ -128,6 +174,6 @@ async def test_pipeline_safe_confirmation_breaks_safety_loop():
     assert len(talker_calls) == 1
 
     talker_system_prompt = talker_calls[0]["system"]
-    assert "A safety message was already shown. Check in gently and do not repeat it." in talker_system_prompt
+    assert SAFETY_ALREADY_SHOWN_NOTE in talker_system_prompt
     assert "The user explicitly confirmed they are currently safe." in talker_system_prompt
 

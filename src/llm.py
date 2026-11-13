@@ -74,6 +74,7 @@ class BaseLLM:
         messages: list[dict],
         tier: str,
         session_id: str | None = None,
+        temperature: float = 0.3,
     ) -> AsyncGenerator[str, None]:
         raise NotImplementedError
         yield ""  # pragma: no cover
@@ -320,6 +321,7 @@ class LLM(BaseLLM):
         messages: list[dict],
         tier: str,
         session_id: str | None = None,
+        temperature: float = 0.3,
     ) -> AsyncGenerator[str, None]:
         """Streams the LLM response chunk by chunk as an async generator."""
         model = self._resolve_model(tier)
@@ -332,6 +334,7 @@ class LLM(BaseLLM):
         payload = {
             "model": model,
             "messages": formatted_messages,
+            "temperature": temperature,
             "stream": True,
         }
 
@@ -512,6 +515,7 @@ class FakeLLM(BaseLLM):
         messages: list[dict],
         tier: str,
         session_id: str | None = None,
+        temperature: float = 0.3,
     ) -> AsyncGenerator[str, None]:
         model = self._resolve_model(tier)
         prompt_version = self._get_prompt_version(prompt_name)

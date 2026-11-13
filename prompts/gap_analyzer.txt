@@ -8,8 +8,8 @@ Topics we already asked about without getting an answer (rank them at most "medi
 
 Return the top 1 to 3 gaps, most valuable first. For each gap give:
 - topic: a short label
-- question_hint: the information needed, as a plain statement (not the final wording)
-- why_it_matters: one plain-language sentence a worried person would understand
+- question_hint: the information needed, written as a natural everyday question you could ask a friend (e.g. "Did he give you anything in writing before changing the locks?"). Never use words like "jurisdiction", "legal area" or "statutory" in it.
+- why_it_matters: one plain-language sentence a worried person would understand, with no law names or section numbers
 - impact: "high" means the advice could change completely or a deadline or limitation period may be at stake without it; "medium" means it would sharpen the advice; "low" means nice to have
 - example_answer: a short example of a good answer
 - can_skip: true if the person can reasonably say "I don't know" and we can proceed with an assumption

@@ -16,6 +16,7 @@ import pytest
 
 from src.db import create_session, get_session
 from src.llm import FakeLLM
+from src.messages import DISCLAIMER_SHORT, FOLLOWUP_FALLBACK_REPLY
 from src.pipeline import handle_turn
 from src.presenter import check_code_guard, fallback_template, present
 from src.redact import redact_service_query, redact_text
@@ -135,10 +136,13 @@ async def test_presenter_fallback_template_path():
     result = await present(session, service_resp, mode="initial", llm=fake_llm)
 
     assert session["last_presenter_path"] == "fallback"
-    assert "Summary:" in result
+    # Conversational fallback: no template headings, source content verbatim, short disclaimer once
+    assert "Summary:" not in result
+    assert "The notice period must be at least 60 days." in result
     assert "File dispute." in result
     assert "Strict deadline." in result
-    assert "IMPORTANT NOTICE" in result or "disclaimer" in result.lower()
+    assert DISCLAIMER_SHORT in result
+    assert session["disclaimer_shown"] is True
 
 
 @pytest.mark.asyncio

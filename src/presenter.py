@@ -1,14 +1,23 @@
 """
 src/presenter.py - Formats and presents the external service answer in friendly chat.
 
-Translates and formats legal content from the service into conversational messages.
-Guards the output using:
+Retells the legal service's answer in the shared conversational voice (prompts/voice.txt),
+in the person's language. All legal content must come from the service answer.
+
+Modes:
+- initial:  first presentation of the main case answer
+- followup: questions/reactions about the stored answer
+- quick:    a mid-conversation question answered by the service, ending with the next intake question
+
+Every mode is guarded using:
 1. Pure code checks: rejects section/article numbers, case citations, currency amounts,
    or dates not present in the source answer.
 2. Faithfulness LLM check (FAST tier) calling prompts/faithfulness.txt.
 If problems are found, regenerates ONCE with problem instructions.
-If it still fails, falls back to a plain formatted template with the disclaimer.
-Logs which path was used ('primary', 'regenerated', 'fallback').
+If it still fails, falls back to a plain template (initial/quick) or an honest
+"I don't want to guess" reply (followup).
+Records which path was used in session['last_presenter_path'] ('primary', 'regenerated', 'fallback').
+The short disclaimer is included only with the first legal answer of a session (session['disclaimer_shown']).
 """
 
 import logging
@@ -17,9 +26,8 @@ import sys
 
 from src.case_ops import render_case_summary
 from src.config import get_settings
-from src.legal_advisory import get_electronic_evidence_guidance, get_limitation_warning
 from src.llm import LLM, BaseLLM
-from src.messages import DISCLAIMER
+from src.messages import DISCLAIMER_SHORT, FOLLOWUP_FALLBACK_REPLY
 from src.prompts import load_prompt, render
 from src.schemas import CaseFile, FaithfulnessReport, ServiceResponse
 
@@ -32,14 +40,15 @@ CURRENCY_REGEX = re.compile(r"(?:[\$\€\£\₹]|CAD|USD|INR)\s*\d+(?:,\d{3})*(?
 DATE_REGEX = re.compile(r"\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember))\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 
 
-def check_code_guard(presenter_text: str, source_answer: str) -> list[str]:
+def check_code_guard(presenter_text: str, source_answer: str, allowed_context: str = "") -> list[str]:
     """
     Checks that any section/article numbers, case citations ('v.' or 'vs'),
-    currency amounts, or dates in presenter_text also appear in source_answer.
+    currency amounts, or dates in presenter_text also appear in source_answer
+    (or in allowed_context, i.e. the person's own case facts, which may be repeated back).
     Returns a list of violation descriptions.
     """
     violations: list[str] = []
-    source_lower = source_answer.lower()
+    source_lower = f"{source_answer}\n{allowed_context}".lower()
 
     # Section / Article numbers
     for match in SECTION_REGEX.findall(presenter_text):
@@ -64,31 +73,32 @@ def check_code_guard(presenter_text: str, source_answer: str) -> list[str]:
     return violations
 
 
+PRESENTER_TEMPERATURE = 0.6
+
+FALLBACK_INTRO = "Here's what the legal service came back with on your situation."
+
+
 def fallback_template(
     service_response: ServiceResponse,
-    disclaimer: str = DISCLAIMER,
-    advisory_notes: list[str] | None = None,
+    disclaimer: str = DISCLAIMER_SHORT,
+    intro: str = FALLBACK_INTRO,
 ) -> str:
     """
-    Fallback plain template that prints the service answer's sections
-    with light formatting, statutory advisories, and the disclaimer.
+    Plain fallback that passes the service answer on verbatim, without template headings,
+    followed by the disclaimer when one is given.
     """
-    parts: list[str] = []
+    parts: list[str] = [intro] if intro else []
     if service_response.sections:
-        for heading, body in service_response.sections.items():
-            title = heading.replace("_", " ").title()
-            parts.append(f"{title}:\n{body.strip()}")
+        for body_text in service_response.sections.values():
+            if body_text and body_text.strip():
+                parts.append(body_text.strip())
     elif service_response.answer:
         parts.append(service_response.answer.strip())
     else:
-        parts.append("Our legal service has processed your case.")
+        parts.append("The answer came back empty, though. Want me to try again?")
 
-    if advisory_notes:
-        notes_text = "\n\n".join(f"• {n}" for n in advisory_notes if n)
-        if notes_text:
-            parts.append(f"Statutory Timelines & Evidentiary Guidance:\n{notes_text}")
-
-    parts.append(f"\n{disclaimer.strip()}")
+    if disclaimer and disclaimer.strip():
+        parts.append(disclaimer.strip())
     return "\n\n".join(parts)
 
 
@@ -97,6 +107,8 @@ async def check_faithfulness(
     presenter_text: str,
     llm: BaseLLM,
     session_id: str | None = None,
+    mode: str = "initial",
+    case_summary: str = "",
 ) -> FaithfulnessReport:
     """Executes the FAST_MODEL faithfulness prompt check."""
     template_text, _ = load_prompt("faithfulness")
@@ -104,6 +116,8 @@ async def check_faithfulness(
         template_text,
         service_answer=service_answer,
         presenter_text=presenter_text,
+        mode=mode,
+        case_summary=case_summary or "(none)",
     )
     return await llm.json(
         prompt_name="faithfulness",
@@ -115,18 +129,31 @@ async def check_faithfulness(
     )
 
 
+def _passes(code_issues: list[str], faith: FaithfulnessReport) -> bool:
+    return not code_issues and faith.ok and not faith.unsupported_claims and not faith.omitted_critical
+
+
+def _fallback(mode: str, service_response: ServiceResponse, disclaimer: str, next_question: str) -> str:
+    if mode == "followup":
+        return FOLLOWUP_FALLBACK_REPLY
+    text = fallback_template(service_response, disclaimer)
+    if mode == "quick" and next_question.strip():
+        text = f"{text}\n\n{next_question.strip()}"
+    return text
+
+
 async def present(
     session: dict,
     service_response: ServiceResponse,
     mode: str = "initial",
     new_message: str = "",
     llm: BaseLLM | None = None,
+    next_question: str = "",
 ) -> str:
     """
-    Presents the legal service answer in friendly chat.
-    Validates output with code guard and faithfulness checks.
-    Regenerates ONCE on failure, or falls back to template.
-    Logs which path was used.
+    Presents the legal service answer conversationally.
+    Validates output with code guard and faithfulness checks in every mode.
+    Regenerates ONCE on failure, or falls back.
     """
     client = llm or LLM()
     session_id = session.get("_id")
@@ -136,28 +163,25 @@ async def present(
     case_obj = CaseFile.model_validate(raw_case) if raw_case else CaseFile()
     case_summary = render_case_summary(case_obj)
     lang_text = case_obj.hard_core.language or session.get("language", "English")
-    style_hint = session.get("style_hint", "calm and clear")
+    style_hint = session.get("style_hint") or "Calm and clear."
+    # The person's own facts (and the next intake question) may be repeated back without being flagged
+    allowed_context = f"{case_summary}\n{next_question}"
 
+    # Short disclaimer only with the first legal answer (initial or quick) in the session
+    disclaimer_text = ""
+    if mode in ("initial", "quick") and not session.get("disclaimer_shown"):
+        disclaimer_text = DISCLAIMER_SHORT
 
-    # Direct base model delivery: provide the base model answer as it is, without rephrasing
-    advisory_notes: list[str] = []
-    limitation_alert = get_limitation_warning(
-        dispute_type=case_obj.hard_core.legal_area_guess,
-        facts=case_obj.facts,
-    )
-    if limitation_alert:
-        advisory_notes.append(limitation_alert)
-
-    evidence_alert = get_electronic_evidence_guidance(facts=case_obj.facts)
-    if evidence_alert:
-        advisory_notes.append(evidence_alert)
+    def _done(text: str, path: str) -> str:
+        session["last_presenter_path"] = path
+        if disclaimer_text:
+            session["disclaimer_shown"] = True
+        return text
 
     settings = get_settings()
     if settings.direct_service_answer and mode == "initial":
-        from src.llm import FakeLLM
-        if not (isinstance(client, FakeLLM) and "presenter" in getattr(client, "responses", {})):
-            session["last_presenter_path"] = "direct_base_model"
-            return fallback_template(service_response, DISCLAIMER, advisory_notes=advisory_notes)
+        # Optional verbatim delivery (DIRECT_SERVICE_ANSWER=true)
+        return _done(fallback_template(service_response, disclaimer_text), "direct_base_model")
 
     template_text, _ = load_prompt("presenter")
     rendered_system = render(
@@ -168,7 +192,8 @@ async def present(
         case_summary=case_summary,
         service_answer=source_answer,
         new_message=new_message,
-        disclaimer=DISCLAIMER,
+        disclaimer=disclaimer_text or "(none)",
+        next_question=next_question or "(none)",
     )
 
     # 1. Primary generation
@@ -178,40 +203,28 @@ async def present(
         messages=[],
         tier="smart",
         session_id=session_id,
+        temperature=PRESENTER_TEMPERATURE,
     )
 
-    # In followup / consultation mode, return the dynamic advisory response directly
-    if mode == "followup":
-        session["last_presenter_path"] = "followup_consultation"
-        return draft_1
+    code_issues_1 = check_code_guard(draft_1, source_answer, allowed_context)
+    faith_1 = await check_faithfulness(source_answer, draft_1, client, session_id, mode=mode, case_summary=case_summary)
+    if _passes(code_issues_1, faith_1):
+        print(f"[Presenter Guard] mode={mode} path=primary", file=sys.stderr)
+        return _done(draft_1, "primary")
 
-    # Guard checks on draft 1
-    code_issues_1 = check_code_guard(draft_1, source_answer)
-    faith_1 = await check_faithfulness(source_answer, draft_1, client, session_id)
+    # 2. Problems detected: regenerate ONCE with problem instructions
+    problems: list[str] = list(code_issues_1)
+    problems.extend(f"Unsupported claim: {c}" for c in faith_1.unsupported_claims)
+    problems.extend(f"Omitted critical detail: {o}" for o in faith_1.omitted_critical)
 
-    if not code_issues_1 and faith_1.ok and not faith_1.unsupported_claims and not faith_1.omitted_critical:
-        session["last_presenter_path"] = "primary"
-        print("[Presenter Guard] Path: primary (Passed all checks)", file=sys.stderr)
-        return draft_1
-
-    # 2. Problems detected: Regenerate ONCE with problem instructions
-    problems: list[str] = []
-    if code_issues_1:
-        problems.extend(code_issues_1)
-    if faith_1.unsupported_claims:
-        problems.extend([f"Unsupported claim: {c}" for c in faith_1.unsupported_claims])
-    if faith_1.omitted_critical:
-        problems.extend([f"Omitted critical detail: {o}" for o in faith_1.omitted_critical])
-
-    fix_instruction = "Fix these problems: " + "; ".join(problems)
     correction_system = (
         f"{rendered_system}\n\n"
-        f"IMPORTANT CORRECTION:\n"
-        f"Your previous attempt had the following issues: {fix_instruction}\n"
-        f"Strictly adhere to the source answer. Do NOT add any citations, laws, sections, dates, or amounts not in it."
+        "IMPORTANT CORRECTION:\n"
+        f"Your previous attempt had these problems: {'; '.join(problems)}\n"
+        "Stick strictly to the source answer. Do NOT add any laws, sections, cases, dates, amounts "
+        "or predictions that are not in it."
     )
-
-    print(f"[Presenter Guard] Draft 1 failed ({len(problems)} issues). Regenerating...", file=sys.stderr)
+    print(f"[Presenter Guard] mode={mode} draft 1 failed ({len(problems)} issues). Regenerating...", file=sys.stderr)
 
     draft_2 = await client.text(
         prompt_name="presenter",
@@ -219,18 +232,15 @@ async def present(
         messages=[],
         tier="smart",
         session_id=session_id,
+        temperature=PRESENTER_TEMPERATURE,
     )
 
-    # Guard checks on draft 2
-    code_issues_2 = check_code_guard(draft_2, source_answer)
-    faith_2 = await check_faithfulness(source_answer, draft_2, client, session_id)
+    code_issues_2 = check_code_guard(draft_2, source_answer, allowed_context)
+    faith_2 = await check_faithfulness(source_answer, draft_2, client, session_id, mode=mode, case_summary=case_summary)
+    if _passes(code_issues_2, faith_2):
+        print(f"[Presenter Guard] mode={mode} path=regenerated", file=sys.stderr)
+        return _done(draft_2, "regenerated")
 
-    if not code_issues_2 and faith_2.ok and not faith_2.unsupported_claims and not faith_2.omitted_critical:
-        session["last_presenter_path"] = "regenerated"
-        print("[Presenter Guard] Path: regenerated (Passed on retry)", file=sys.stderr)
-        return draft_2
-
-    # 3. Still failed: Fall back to plain template
-    session["last_presenter_path"] = "fallback"
-    print("[Presenter Guard] Path: fallback (Template used)", file=sys.stderr)
-    return fallback_template(service_response, DISCLAIMER, advisory_notes=advisory_notes)
+    # 3. Still failing: safe fallback
+    print(f"[Presenter Guard] mode={mode} path=fallback", file=sys.stderr)
+    return _done(_fallback(mode, service_response, disclaimer_text, next_question), "fallback")

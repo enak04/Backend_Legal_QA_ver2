@@ -89,10 +89,10 @@ async def find_gaps(
                 0,
                 Gap(
                     topic="Location / Jurisdiction",
-                    question_hint="What city or state did this occur in?",
-                    why_it_matters="Applicable labor and employment laws depend on the state or city where you worked.",
+                    question_hint="Where is this happening — which city and state?",
+                    why_it_matters="Rules differ from state to state, so this can change the answer.",
                     impact="high",
-                    example_answer="Bangalore, Karnataka",
+                    example_answer="Pune, Maharashtra",
                     can_skip=False,
                 ),
             )

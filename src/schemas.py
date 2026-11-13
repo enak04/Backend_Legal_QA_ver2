@@ -214,6 +214,10 @@ class UnderstandOutput(BaseModel):
     language: str = "English"
     patch: CasePatch = Field(default_factory=CasePatch)
     change_summary: str = ""
+    # The person's question in this message, if any (used to answer mid-conversation)
+    question: str = ""
+    # False when the question can be answered generally, without knowing their case details
+    question_needs_case_facts: bool = True
 
 
 class AffectReading(BaseModel):
@@ -279,6 +283,7 @@ class ServiceQueryFact(BaseModel):
 
 class ServiceQuery(BaseModel):
     """Compiled self-contained query sent to the external legal answering service."""
+    kind: str = "case"  # "case" (full confirmed case) | "quick_question" (single mid-conversation question)
     query_text: str = ""
     jurisdiction: str | None = None
     legal_area: str | None = None

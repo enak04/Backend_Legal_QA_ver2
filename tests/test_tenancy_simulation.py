@@ -289,9 +289,10 @@ async def test_just_give_me_answer_skips_low_impact_but_asks_jurisdiction_if_mis
     assert reply1 != "READY_FOR_CONFIRMATION"
     assert session1["status"] == "COLLECTING"
 
-    # Check system prompt warned talker to explain why jurisdiction is needed
+    # Check system prompt told talker to move fast but still ask where this is happening
     talker_call = [c for c in fake_missing_jur.call_history if c["prompt_name"] == "talker"][0]
-    assert "Explain in one sentence why these two are needed" in talker_call["system"]
+    assert "They want an answer now." in talker_call["system"]
+    assert "where this is happening" in talker_call["system"]
 
     # Case 2: Jurisdiction and user_goal present + low/medium impact gaps
     session2 = await create_session()

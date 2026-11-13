@@ -17,6 +17,9 @@ from typing import Any
 # Base path to the prompts directory
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
+# Placeholder replaced at load time with the contents of prompts/voice.txt
+VOICE_PLACEHOLDER = "{{voice}}"
+
 
 def load_prompt(name: str, prompts_dir: Path | None = None) -> tuple[str, str]:
     """
@@ -31,6 +34,14 @@ def load_prompt(name: str, prompts_dir: Path | None = None) -> tuple[str, str]:
         raise FileNotFoundError(f"Prompt file not found at: {filepath}")
 
     text = filepath.read_text(encoding="utf-8")
+
+    # Inline the shared assistant voice so every conversational prompt speaks the same way.
+    # The version hash is computed on the combined text, so voice edits change the logged version.
+    if VOICE_PLACEHOLDER in text:
+        voice_path = directory / "voice.txt"
+        voice_text = voice_path.read_text(encoding="utf-8").strip() if voice_path.is_file() else ""
+        text = text.replace(VOICE_PLACEHOLDER, voice_text)
+
     version = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
     return text, version
 

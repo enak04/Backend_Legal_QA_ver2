@@ -10,12 +10,16 @@ Fills the talker prompt template with current context and placeholder values:
 Wraps user messages in <user_message> tags for security and limits history to HISTORY_WINDOW messages.
 """
 
+import re
 from collections.abc import AsyncGenerator
 
 from src.config import get_settings
 from src.llm import LLM, BaseLLM
 from src.prompts import load_prompt, render
 from src.schemas import Gap
+
+# Higher than the extraction/JSON calls so replies vary naturally instead of repeating
+TALKER_TEMPERATURE = 0.7
 
 
 def format_gaps_for_talker(gaps: list[Gap] | list[dict] | str | None) -> str:
@@ -34,14 +38,18 @@ def format_gaps_for_talker(gaps: list[Gap] | list[dict] | str | None) -> str:
     for idx, g in enumerate(gaps, 1):
         if isinstance(g, dict):
             topic = g.get("topic", "")
+            hint = g.get("question_hint", "")
             why = g.get("why_it_matters", "")
             example = g.get("example_answer", "")
         else:
             topic = getattr(g, "topic", "")
+            hint = getattr(g, "question_hint", "")
             why = getattr(g, "why_it_matters", "")
             example = getattr(g, "example_answer", "")
 
         lines = [f"{idx}. Topic: {topic}"]
+        if hint:
+            lines.append(f"   What to find out: {hint}")
         if why:
             lines.append(f"   Why it matters: {why}")
         if example:
@@ -70,6 +78,25 @@ def _format_conversation_history(messages: list[dict], window_size: int) -> list
     return formatted
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s")
+
+
+def extract_recent_openers(messages: list[dict], n: int = 3) -> str:
+    """
+    Returns the first sentence of the last n assistant messages, one per line,
+    so the talker can avoid opening every reply the same way.
+    """
+    assistant_texts = [m.get("text", "") for m in messages if m.get("role") == "assistant" and m.get("text")]
+    openers: list[str] = []
+    for text in assistant_texts[-n:]:
+        first = _SENTENCE_END.split(text.strip(), maxsplit=1)[0].strip()
+        if len(first) > 120:
+            first = first[:117].rstrip() + "..."
+        if first:
+            openers.append(f"- {first}")
+    return "\n".join(openers) if openers else "(none yet)"
+
+
 from typing import Literal, overload
 
 
@@ -84,6 +111,7 @@ async def build_talker_reply(
     language: str | None = None,
     style_hint: str | None = None,
     system_notes: str | None = None,
+    progress: str | None = None,
 ) -> str: ...
 
 
@@ -98,6 +126,7 @@ async def build_talker_reply(
     language: str | None = None,
     style_hint: str | None = None,
     system_notes: str | None = None,
+    progress: str | None = None,
 ) -> AsyncGenerator[str, None]: ...
 
 
@@ -112,6 +141,7 @@ async def build_talker_reply(
     language: str | None = None,
     style_hint: str | None = None,
     system_notes: str | None = None,
+    progress: str | None = None,
 ) -> str | AsyncGenerator[str, None]: ...
 
 
@@ -125,6 +155,7 @@ async def build_talker_reply(
     language: str | None = None,
     style_hint: str | None = None,
     system_notes: str | None = None,
+    progress: str | None = None,
 ) -> str | AsyncGenerator[str, None]:
     """
     Loads and renders the talker prompt template, formats conversation history,
@@ -154,6 +185,8 @@ async def build_talker_reply(
         style_hint=hint_text,
         system_notes=notes_text,
         max_questions=settings.max_questions_per_turn,
+        progress=progress or "Early in the conversation.",
+        recent_openers=extract_recent_openers(messages),
     )
 
     formatted_history = _format_conversation_history(
@@ -170,6 +203,7 @@ async def build_talker_reply(
             messages=formatted_history,
             tier="smart",
             session_id=session_id,
+            temperature=TALKER_TEMPERATURE,
         )
     else:
         return await client.text(
@@ -178,5 +212,6 @@ async def build_talker_reply(
             messages=formatted_history,
             tier="smart",
             session_id=session_id,
+            temperature=TALKER_TEMPERATURE,
         )
 

@@ -5,5 +5,7 @@
   "fact_recall_min": 0.8,
   "fact_precision_min": 0.95,
   "avg_turns_to_ready_max": 9.0,
-  "tone_average_min": 4.0
+  "tone_average_min": 4.0,
+  "human_likeness_min": 4.0,
+  "answers_questions_min": 4.0
 }

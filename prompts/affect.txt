@@ -18,7 +18,7 @@ Return JSON with these fields:
 - crisis_violence_or_abuse: true if the person or someone else is in danger now, is being threatened, abused or stalked, or if the person threatens to hurt someone
 - crisis_detention: true if someone has just been arrested or detained, or is about to be
 - language: the language and script the person wrote in
-- style_note: one short sentence on factual tone or pacing (e.g. "Keep tone direct, polite, and brief"). Do NOT suggest asking personal emotional or family support questions.
+- style_note: one short sentence on how a thoughtful person would pitch the next reply: warmth, pace and register (e.g. "They're terse and businesslike, so keep it brief and direct", "They're rattled, so a short kind reaction first, then one simple question"). Do NOT suggest asking personal emotional or family support questions.
 
 RULES
 1. Judge the newest message in the light of the recent ones (distress builds up).

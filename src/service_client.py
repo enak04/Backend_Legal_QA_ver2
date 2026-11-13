@@ -130,6 +130,15 @@ class ServiceClient:
 
     def _mock_ask(self, query: ServiceQuery) -> ServiceResponse:
         """Realistic mock answering service for testing and development."""
+        # Single mid-conversation question: short direct answer
+        if query.kind == "quick_question":
+            answer = (
+                "Generally, a landlord cannot lock a tenant out or remove their belongings without following "
+                "the legal eviction process, which usually requires a court or tribunal order. "
+                "The exact steps depend on the tenancy agreement and local rules."
+            )
+            return ServiceResponse(status="answered", answer=answer, missing_info=[], citations=[])
+
         # If no documents are listed in the query, trigger needs_more_info
         if not query.documents:
             return ServiceResponse(

@@ -13,6 +13,9 @@ from src.prompts import load_prompt, render
 from src.redact import redact_service_query
 from src.schemas import CaseFile, ServiceQuery
 
+# Recap is written in the shared voice; slightly higher than JSON calls so it reads naturally
+RECAP_TEMPERATURE = 0.6
+
 
 async def make_recap(
     session: dict,
@@ -44,6 +47,7 @@ async def make_recap(
         messages=[],
         tier="smart",
         session_id=session_id,
+        temperature=RECAP_TEMPERATURE,
     )
 
     return recap_text.strip()
@@ -87,3 +91,28 @@ async def build_service_query(
     # Strip PII before returning
     cleaned_query = redact_service_query(raw_query)
     return cleaned_query
+
+
+def build_quick_question_query(case: CaseFile, question: str) -> ServiceQuery:
+    """
+    Builds a ServiceQuery for a single question asked mid-conversation, without an LLM call
+    (to keep the turn fast). Includes a short context block from the case so far so the
+    legal service can tailor the answer. PII is stripped before returning.
+    """
+    hc = case.hard_core
+    context = render_case_summary(case)
+    query_text = (
+        f"Question: {question.strip()}\n\n"
+        "Context (the conversation is still in progress, so these details may be incomplete):\n"
+        f"{context}"
+    )
+    query = ServiceQuery(
+        kind="quick_question",
+        query_text=query_text,
+        jurisdiction=hc.jurisdiction,
+        legal_area=hc.legal_area_guess,
+        user_goal=hc.user_goal,
+        questions_to_answer=[question.strip()],
+        user_language=hc.language or "English",
+    )
+    return redact_service_query(query)

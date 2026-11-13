@@ -132,3 +132,29 @@ def filter_gaps_to_ask(
             break
 
     return to_ask
+
+
+def describe_progress(
+    gap_analysis: GapAnalysis,
+    turn_count: int,
+    settings: Settings,
+    session: dict | None = None,
+) -> str:
+    """
+    Turns readiness signals into a short plain phrase the talker can use to tell the
+    person where things stand (e.g. "almost there"). Pure code, no LLM.
+    """
+    counts = (session or {}).get("asked_counts", {}) or {}
+    remaining_high = [
+        g for g in gap_analysis.gaps
+        if g.impact == "high" and not (g.can_skip and counts.get(g.topic, 0) >= 2)
+    ]
+    turns_left = max(settings.max_collecting_turns - turn_count, 0)
+
+    if turn_count <= 1:
+        return "Just getting started; the person has only told you the basics."
+    if not remaining_high or turns_left <= 1:
+        return "Almost there: one more detail at most and you can get them a proper answer."
+    if len(remaining_high) == 1 or turns_left <= 2:
+        return "Close: about one or two important things left before you can get them an answer."
+    return "Still building the picture: a few important things are missing."

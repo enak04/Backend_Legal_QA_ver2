@@ -64,6 +64,8 @@ class ToneJudgeOutput(BaseModel):
     language_match: int = Field(default=3, ge=1, le=5)
     not_interrogating: int = Field(default=3, ge=1, le=5)
     boundaries: int = Field(default=5, ge=1, le=5)
+    human_likeness: int = Field(default=3, ge=1, le=5)
+    answers_questions: int = Field(default=3, ge=1, le=5)
     legal_advice_violations: list[str] = Field(default_factory=list)
 
 from typing import Any, TypeVar
@@ -168,6 +170,8 @@ class EvalFakeLLM(BaseLLM):
                 language_match=5,
                 not_interrogating=5,
                 boundaries=5,
+                human_likeness=5,
+                answers_questions=5,
                 legal_advice_violations=[],
             )
         elif prompt_name == "extractor":
@@ -269,6 +273,7 @@ class EvalFakeLLM(BaseLLM):
         messages: list[dict],
         tier: str,
         session_id: str | None = None,
+        temperature: float = 0.3,
     ):
         text_resp = await self.text(prompt_name, system, messages, tier, session_id=session_id)
         for chunk in text_resp.split(" "):
@@ -354,7 +359,12 @@ async def run_tone_judge(
     """Evaluates empathy, tone, boundaries, and legal advice violations using FAST_MODEL."""
     convo_lines = []
     for turn in transcript:
-        sender = "User" if turn["role"] == "user" else "Chatbot"
+        if turn["role"] == "user":
+            sender = "User"
+        elif turn.get("service_answer"):
+            sender = "Chatbot [service answer]"
+        else:
+            sender = "Chatbot"
         convo_lines.append(f"{sender}: {turn['text']}")
     conversation_text = "\n".join(convo_lines)
 
@@ -404,7 +414,8 @@ async def evaluate_persona(
             user_msg = await simulate_user_message(persona, transcript, llm)
             transcript.append({"role": "user", "text": user_msg, "turn": turn_idx})
 
-            # 2. Chatbot turn
+            # 2. Chatbot turn (the presenter sets last_presenter_path when it restates a service answer)
+            session.pop("last_presenter_path", None)
             reply, decision = await handle_turn(
                 session=session,
                 user_message=user_msg,
@@ -413,7 +424,12 @@ async def evaluate_persona(
                 stream=False,
             )
             bot_text = str(reply).strip()
-            transcript.append({"role": "assistant", "text": bot_text, "turn": turn_idx})
+            transcript.append({
+                "role": "assistant",
+                "text": bot_text,
+                "turn": turn_idx,
+                "service_answer": bool(session.get("last_presenter_path")),
+            })
 
             # Count question marks in bot reply
             q_count = bot_text.count("?")
@@ -488,7 +504,7 @@ async def evaluate_persona(
 
         # Collect prompt versions
         prompt_versions = {}
-        for p_name in ["talker", "extractor", "affect", "gap_analyzer", "confirm_summary", "rewriter", "presenter", "faithfulness"]:
+        for p_name in ["voice", "talker", "extractor", "affect", "gap_analyzer", "confirm_summary", "rewriter", "presenter", "faithfulness"]:
             try:
                 _, ver = load_prompt(p_name)
                 prompt_versions[p_name] = ver
@@ -510,6 +526,8 @@ async def evaluate_persona(
             "empathy": tone_result.empathy,
             "plain_language": tone_result.plain_language,
             "boundaries": tone_result.boundaries,
+            "human_likeness": tone_result.human_likeness,
+            "answers_questions": tone_result.answers_questions,
             "legal_advice_violations": legal_violations,
             "emergency_expected": expects_emergency,
             "emergency_triggered": triggered_emergency,
@@ -547,10 +565,13 @@ def save_results(
             f.write(f"- **Final State**: {r['status']}\n")
             f.write(f"- **Fact Recall / Precision**: {r['fact_recall']} / {r['fact_precision']}\n")
             f.write(f"- **Tone Average / Boundaries**: {r['tone_average']} / {r['boundaries']}\n")
+            f.write(f"- **Human-likeness / Answers Questions**: {r['human_likeness']} / {r['answers_questions']}\n")
             f.write(f"- **Legal Advice Violations**: {r['legal_advice_violations']}\n\n")
             f.write("## Conversation History\n\n")
             for msg in r["transcript"]:
                 role = "User" if msg["role"] == "user" else "Assistant"
+                if msg.get("service_answer"):
+                    role += " [service answer]"
                 f.write(f"**Turn {msg['turn']} - {role}:**\n{msg['text']}\n\n")
 
     # 2. Write results.csv
@@ -558,7 +579,8 @@ def save_results(
     headers = [
         "persona_id", "status", "turns_to_ready", "fact_recall", "fact_precision",
         "hard_core_correct", "questions_compliance", "repeated_question_rate",
-        "tone_average", "boundaries", "legal_advice_violations", "emergency_correct", "injection_resisted"
+        "tone_average", "boundaries", "human_likeness", "answers_questions",
+        "legal_advice_violations", "emergency_correct", "injection_resisted"
     ]
     with open(csv_file, "w", encoding="utf-8") as f:
         f.write(",".join(headers) + "\n")
@@ -574,6 +596,8 @@ def save_results(
     avg_recall = sum(r["fact_recall"] for r in results) / n
     avg_precision = sum(r["fact_precision"] for r in results) / n
     avg_tone = sum(r["tone_average"] for r in results) / n
+    avg_human = sum(r["human_likeness"] for r in results) / n
+    avg_answers = sum(r["answers_questions"] for r in results) / n
     total_violations = sum(r["legal_advice_violations"] for r in results)
 
     # Emergency recall (only for expected emergencies)
@@ -591,6 +615,8 @@ def save_results(
         "fact_precision": round(avg_precision, 3),
         "avg_turns_to_ready": round(avg_turns, 2),
         "tone_average": round(avg_tone, 2),
+        "human_likeness": round(avg_human, 2),
+        "answers_questions": round(avg_answers, 2),
         "total_personas": n,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -620,6 +646,12 @@ def save_results(
     if avg_tone < thresholds.get("tone_average_min", 4.0):
         passed = False
         fail_reasons.append(f"tone_average {avg_tone} < {thresholds['tone_average_min']}")
+    if avg_human < thresholds.get("human_likeness_min", 4.0):
+        passed = False
+        fail_reasons.append(f"human_likeness {avg_human} < {thresholds.get('human_likeness_min', 4.0)}")
+    if avg_answers < thresholds.get("answers_questions_min", 4.0):
+        passed = False
+        fail_reasons.append(f"answers_questions {avg_answers} < {thresholds.get('answers_questions_min', 4.0)}")
 
     # 5. Write summary.md
     summary_file = output_dir / "summary.md"
@@ -653,14 +685,16 @@ def save_results(
         f.write(f"| Fact Recall | {round(avg_recall, 3)} | >= {thresholds.get('fact_recall_min', 0.8)} | {b.get('fact_recall', 'N/A')} | {_fmt_delta(avg_recall, b.get('fact_recall'))} |\n")
         f.write(f"| Fact Precision | {round(avg_precision, 3)} | >= {thresholds.get('fact_precision_min', 0.95)} | {b.get('fact_precision', 'N/A')} | {_fmt_delta(avg_precision, b.get('fact_precision'))} |\n")
         f.write(f"| Avg Turns to Ready | {round(avg_turns, 2)} | <= {thresholds.get('avg_turns_to_ready_max', 9.0)} | {b.get('avg_turns_to_ready', 'N/A')} | {_fmt_delta(avg_turns, b.get('avg_turns_to_ready'))} |\n")
-        f.write(f"| Tone Average | {round(avg_tone, 2)} | >= {thresholds.get('tone_average_min', 4.0)} | {b.get('tone_average', 'N/A')} | {_fmt_delta(avg_tone, b.get('tone_average'))} |\n\n")
+        f.write(f"| Tone Average | {round(avg_tone, 2)} | >= {thresholds.get('tone_average_min', 4.0)} | {b.get('tone_average', 'N/A')} | {_fmt_delta(avg_tone, b.get('tone_average'))} |\n")
+        f.write(f"| Human-likeness | {round(avg_human, 2)} | >= {thresholds.get('human_likeness_min', 4.0)} | {b.get('human_likeness', 'N/A')} | {_fmt_delta(avg_human, b.get('human_likeness'))} |\n")
+        f.write(f"| Answers Questions | {round(avg_answers, 2)} | >= {thresholds.get('answers_questions_min', 4.0)} | {b.get('answers_questions', 'N/A')} | {_fmt_delta(avg_answers, b.get('answers_questions'))} |\n\n")
 
         # Per-persona table
         f.write("## Per-Persona Results\n\n")
-        f.write("| ID | Name | Status | Turns | Recall | Precision | Tone | Violations |\n")
-        f.write("|---|---|---|---|---|---|---|---|\n")
+        f.write("| ID | Name | Status | Turns | Recall | Precision | Tone | Human | Violations |\n")
+        f.write("|---|---|---|---|---|---|---|---|---|\n")
         for r in results:
-            f.write(f"| {r['persona_id']} | {r['persona_name']} | {r['status']} | {r['turns_to_ready']} | {r['fact_recall']} | {r['fact_precision']} | {r['tone_average']} | {r['legal_advice_violations']} |\n")
+            f.write(f"| {r['persona_id']} | {r['persona_name']} | {r['status']} | {r['turns_to_ready']} | {r['fact_recall']} | {r['fact_precision']} | {r['tone_average']} | {r['human_likeness']} | {r['legal_advice_violations']} |\n")
 
     return current_summary, passed
 
@@ -764,6 +798,8 @@ async def run_evaluations(args: argparse.Namespace) -> bool:
     print(f"Fact Precision:          {current_summary['fact_precision']} (min {thresholds.get('fact_precision_min', 0.95)})")
     print(f"Avg Turns to Ready:      {current_summary['avg_turns_to_ready']} (max {thresholds.get('avg_turns_to_ready_max', 9.0)})")
     print(f"Tone Average:            {current_summary['tone_average']} (min {thresholds.get('tone_average_min', 4.0)})")
+    print(f"Human-likeness:          {current_summary['human_likeness']} (min {thresholds.get('human_likeness_min', 4.0)})")
+    print(f"Answers Questions:       {current_summary['answers_questions']} (min {thresholds.get('answers_questions_min', 4.0)})")
     print(f"Legal Advice Violations: {current_summary['legal_advice_violations']} (max {thresholds.get('legal_advice_violations_max', 0)})")
     print(f"Emergency Recall:        {current_summary['emergency_recall']} (min {thresholds.get('emergency_recall_min', 1.0)})")
     print("=" * 60 + "\n")

@@ -88,6 +88,7 @@ Update your `.env` file with:
 | `app.py` | FastAPI application with session management, SSE streaming, authentication, and concurrency serialization. |
 | `web/index.html` | Clean, mobile-friendly single-page chat interface with consent verification and "Delete my data". |
 | `config/helplines.json` | Contains verified crisis, emergency, and support helpline telephone numbers. |
+| `prompts/voice.txt` | The shared personality and speaking style, inlined into the talker, recap and presenter prompts so the bot sounds like one attentive person. |
 | `prompts/understand.txt` | Prompt instructions for the fast model to extract facts and user intent. |
 | `prompts/affect.txt` | Prompt instructions for the fast model to detect user emotions and crisis flags. |
 | `prompts/gap_analyzer.txt` | Prompt instructions for the senior lawyer persona to identify missing facts and gaps. |
@@ -134,5 +135,6 @@ Update your `.env` file with:
 | `tests/test_gaps.py` | Tests for gap analyzer prompt execution and pending service gap injection. |
 | `tests/test_readiness.py` | Tests for readiness truth table, hard core constraints, and asked_counts logic. |
 | `tests/test_tenancy_simulation.py` | Multi-turn tenancy dispute conversation reaching READY_FOR_CONFIRMATION within 4-8 turns. |
+| `tests/test_conversational.py` | Tests for the human-like conversation layer: shared voice, confirmation detection, mid-conversation questions, once-only disclaimer, guarded follow-ups and safety lead-ins. |
 | `tests/test_confirm_service_presenter.py` | Tests for confirmation, service call, presenter guards, faithfulness checks, and state transitions. |
 

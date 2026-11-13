@@ -1,120 +1,114 @@
 {
-  "country": "US",
+  "country": "IN",
   "categories": {
     "self_harm": {
       "contacts": [
         {
-          "name": "Suicide & Crisis Lifeline",
-          "number": "988"
+          "name": "Tele-MANAS (Govt. of India mental health helpline)",
+          "number": "14416 or 1-800-891-4416"
         },
         {
-          "name": "Crisis Text Line",
-          "number": "Text HOME to 741741"
+          "name": "Emergency Response (ERSS)",
+          "number": "112"
         }
       ],
       "lead_in": {
         "en": "I'm really glad you told me this, and I want to pause the legal side for a moment, because you matter more than any case.",
         "hi": "मुझे खुशी है कि आपने यह बताया। मैं कानूनी बातें एक पल के लिए रोकना चाहता हूँ, क्योंकि आप किसी भी केस से ज़्यादा ज़रूरी हैं।",
-        "hinglish": "Mujhe sach mein accha laga ki aapne yeh bataya. Ek pal ke liye legal baat rokte hain, kyunki aap kisi bhi case se zyada important hain.",
-        "es": "Me alegra mucho que me lo hayas contado, y quiero pausar lo legal un momento, porque tú importas más que cualquier caso."
+        "hinglish": "Mujhe sach mein accha laga ki aapne yeh bataya. Ek pal ke liye legal baat rokte hain, kyunki aap kisi bhi case se zyada important hain."
       },
       "messages": {
-        "en": "Please connect with the Suicide & Crisis Lifeline at 988 or text HOME to 741741. Free, confidential support is available 24/7. Whenever you are ready, you can continue this conversation here.",
-        "hi": "कृपया तुरंत 988 पर कॉल करें या 741741 पर HOME लिखकर संदेश भेजें। यह पूरी तरह से गोपनीय और निःशुल्क है। जब भी आप सहज महसूस करें, आप यहाँ बातचीत जारी रख सकते हैं।",
-        "hinglish": "Please turant 988 par call karein ya 741741 par HOME text karein. Yeh free aur confidential help 24/7 uplabdh hai. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain.",
-        "es": "Por favor llame al 988 o envíe un mensaje de texto con la palabra HOME al 741741. Es gratuito y confidencial las 24 horas. Puede continuar esta conversación cuando esté listo."
+        "en": "Please call Tele-MANAS on 14416 (or 1-800-891-4416). It's free, confidential, available 24/7 and you can speak in your own language. If you are in immediate danger, call 112. Whenever you are ready, you can continue this conversation here.",
+        "hi": "कृपया Tele-MANAS को 14416 (या 1-800-891-4416) पर कॉल करें। यह निःशुल्क, गोपनीय और 24 घंटे उपलब्ध है, और आप अपनी भाषा में बात कर सकते हैं। अगर आप तुरंत खतरे में हैं, तो 112 पर कॉल करें। जब भी आप सहज महसूस करें, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "Please Tele-MANAS ko 14416 (ya 1-800-891-4416) par call karein. Yeh free, confidential aur 24/7 available hai, aur aap apni bhasha mein baat kar sakte hain. Agar aap turant khatre mein hain, toh 112 par call karein. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain."
       }
     },
     "violence_abuse": {
       "contacts": [
         {
-          "name": "National Domestic Violence Hotline",
-          "number": "1-800-799-7233"
+          "name": "Women Helpline",
+          "number": "181"
         },
         {
-          "name": "Crisis Text Line",
-          "number": "Text START to 88788"
+          "name": "Emergency Response (ERSS)",
+          "number": "112"
         }
       ],
       "lead_in": {
         "en": "That sounds frightening, and your safety comes first, before anything legal.",
         "hi": "यह सुनकर चिंता हो रही है। किसी भी कानूनी बात से पहले आपकी सुरक्षा ज़रूरी है।",
-        "hinglish": "Yeh sunke sach mein chinta ho rahi hai. Kisi bhi legal baat se pehle aapki safety zaroori hai.",
-        "es": "Eso suena aterrador, y tu seguridad va primero, antes que cualquier cosa legal."
+        "hinglish": "Yeh sunke sach mein chinta ho rahi hai. Kisi bhi legal baat se pehle aapki safety zaroori hai."
       },
       "messages": {
-        "en": "Please reach the National Domestic Violence Hotline at 1-800-799-7233 or text START to 88788 for immediate confidential support. You are always welcome to continue this intake whenever it is safe for you.",
-        "hi": "कृपया तत्काल 1-800-799-7233 पर कॉल करें या 88788 पर START लिखकर संदेश भेजें। आपकी सुरक्षा सबसे महत्वपूर्ण है। जब भी आपके लिए सुरक्षित हो, आप यहाँ बातचीत जारी रख सकते हैं।",
-        "hinglish": "Please 1-800-799-7233 par call karein ya 88788 par START text karein. Aapki safety sabse zaroori hai. Jab bhi aapke liye safe ho, aap yahan apni baat continue kar sakte hain.",
-        "es": "Por favor llame al 1-800-799-7233 o envíe un mensaje de texto con la palabra START al 88788. Puede continuar esta conversación cuando sea seguro para usted."
+        "en": "If you are in danger right now, please call 112. For women facing violence or abuse, the Women Helpline 181 is free and available 24/7, and can connect you to the police, a One Stop Centre, medical help and legal support. You are always welcome to continue here whenever it is safe for you.",
+        "hi": "अगर आप अभी खतरे में हैं, तो कृपया 112 पर कॉल करें। हिंसा या उत्पीड़न का सामना कर रही महिलाओं के लिए महिला हेल्पलाइन 181 निःशुल्क और 24 घंटे उपलब्ध है, और पुलिस, वन स्टॉप सेंटर, चिकित्सा और कानूनी सहायता से जोड़ सकती है। जब भी आपके लिए सुरक्षित हो, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "Agar aap abhi khatre mein hain, toh please 112 par call karein. Hinsa ya abuse jhel rahi mahilaon ke liye Women Helpline 181 free aur 24/7 available hai, aur police, One Stop Centre, medical aur legal help se jod sakti hai. Jab bhi aapke liye safe ho, aap yahan apni baat continue kar sakte hain."
       }
     },
     "child_safety": {
       "contacts": [
         {
-          "name": "Childhelp National Child Abuse Hotline",
-          "number": "1-800-422-4453"
+          "name": "Child Helpline",
+          "number": "1098"
+        },
+        {
+          "name": "Emergency Response (ERSS)",
+          "number": "112"
         }
       ],
       "lead_in": {
         "en": "A child's safety comes before everything else here, so first:",
         "hi": "यहाँ बच्चे की सुरक्षा सबसे पहले है, इसलिए सबसे पहले:",
-        "hinglish": "Yahan bachche ki safety sabse pehle hai, isliye sabse pehle:",
-        "es": "La seguridad de un niño va antes que todo lo demás, así que primero:"
+        "hinglish": "Yahan bachche ki safety sabse pehle hai, isliye sabse pehle:"
       },
       "messages": {
-        "en": "Please contact the Childhelp National Hotline at 1-800-422-4453 for confidential guidance and immediate assistance. You may continue sharing details here whenever you are ready.",
-        "hi": "कृपया बच्चों की सुरक्षा और सहायता के लिए 1-800-422-4453 पर कॉल करें। जब भी आप तैयार हों, आप यहाँ बातचीत जारी रख सकते हैं।",
-        "hinglish": "Please child safety ke liye 1-800-422-4453 par call karein. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain.",
-        "es": "Por favor llame a la Línea Nacional de Abuso Infantil al 1-800-422-4453. Puede continuar esta conversación cuando esté listo."
+        "en": "Please call the Child Helpline on 1098. It's free, available 24/7, and anyone can call on a child's behalf. If the child is in immediate danger, call 112. You may continue sharing details here whenever you are ready.",
+        "hi": "कृपया चाइल्ड हेल्पलाइन 1098 पर कॉल करें। यह निःशुल्क और 24 घंटे उपलब्ध है, और कोई भी बच्चे की ओर से कॉल कर सकता है। अगर बच्चा तुरंत खतरे में है, तो 112 पर कॉल करें। जब भी आप तैयार हों, आप यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "Please Child Helpline 1098 par call karein. Yeh free aur 24/7 available hai, aur koi bhi bachche ki taraf se call kar sakta hai. Agar bachcha turant khatre mein hai, toh 112 par call karein. Jab bhi aap ready feel karein, aap yahan apni baat continue kar sakte hain."
       }
     },
     "arrest_detention": {
       "contacts": [
         {
-          "name": "Emergency Legal Aid Hotline",
-          "number": "1-800-529-4357"
+          "name": "NALSA Legal Aid Helpline",
+          "number": "15100"
         }
       ],
       "lead_in": {
         "en": "That's a lot to deal with all at once. The first priority is getting legal help to them quickly.",
         "hi": "यह एक साथ बहुत कुछ है। सबसे पहले ज़रूरी है कि उन्हें जल्दी कानूनी मदद मिले।",
-        "hinglish": "Yeh ek saath bahut kuch hai. Sabse pehle zaroori hai ki unhe jaldi legal help mile.",
-        "es": "Es mucho para enfrentar de golpe. La primera prioridad es conseguirles ayuda legal rápido."
+        "hinglish": "Yeh ek saath bahut kuch hai. Sabse pehle zaroori hai ki unhe jaldi legal help mile."
       },
       "messages": {
-        "en": "If someone has been arrested or is facing detention, please contact the legal aid helpline at 1-800-529-4357 or a local criminal defense attorney immediately. You have the right to remain silent and request counsel. You can continue this chat whenever you are ready.",
-        "hi": "यदि किसी को गिरफ्तार या हिरासत में लिया गया है, तो तुरंत 1-800-529-4357 पर कानूनी सहायता हेल्पलाइन या किसी वकील से संपर्क करें। आप जब चाहें यहाँ बातचीत जारी रख सकते हैं।",
-        "hinglish": "Agar kisi ko arrest ya detain kiya gaya hai, toh turant 1-800-529-4357 par legal aid ya local defense lawyer se sampark karein. Aap jab chahein yahan baat continue kar sakte hain.",
-        "es": "Si alguien ha sido arrestado o detenido, llame al 1-800-529-4357 para obtener ayuda legal inmediata. Tiene derecho a guardar silencio. Puede continuar este chat cuando esté listo."
+        "en": "If someone has been arrested or detained, please contact a lawyer as soon as you can. If you can't afford one, call the NALSA free legal aid helpline on 15100 or reach the nearest District Legal Services Authority. You can continue this chat whenever you are ready.",
+        "hi": "अगर किसी को गिरफ्तार या हिरासत में लिया गया है, तो जल्द से जल्द किसी वकील से संपर्क करें। अगर वकील का खर्च नहीं उठा सकते, तो NALSA की निःशुल्क कानूनी सहायता हेल्पलाइन 15100 पर कॉल करें या नज़दीकी जिला विधिक सेवा प्राधिकरण से संपर्क करें। आप जब चाहें यहाँ बातचीत जारी रख सकते हैं।",
+        "hinglish": "Agar kisi ko arrest ya detain kiya gaya hai, toh jaldi se jaldi kisi lawyer se sampark karein. Agar lawyer afford nahi kar sakte, toh NALSA ki free legal aid helpline 15100 par call karein ya nazdeeki District Legal Services Authority se sampark karein. Aap jab chahein yahan baat continue kar sakte hain."
       }
     },
     "legal_aid": {
       "contacts": [
         {
-          "name": "Legal Aid Services",
-          "number": "1-800-555-5342"
+          "name": "NALSA Legal Aid Helpline",
+          "number": "15100"
         }
       ],
       "messages": {
-        "en": "You can connect with free or low-cost civil legal aid at 1-800-555-5342.",
-        "hi": "आप 1-800-555-5342 पर निःशुल्क कानूनी सहायता से संपर्क कर सकते हैं।",
-        "hinglish": "Aap 1-800-555-5342 par free legal aid se sampark kar sakte hain.",
-        "es": "Puede comunicarse con servicios de ayuda legal al 1-800-555-5342."
+        "en": "You can get free legal aid through the NALSA helpline on 15100 or your District Legal Services Authority.",
+        "hi": "आप NALSA हेल्पलाइन 15100 या अपने जिला विधिक सेवा प्राधिकरण के माध्यम से निःशुल्क कानूनी सहायता प्राप्त कर सकते हैं।",
+        "hinglish": "Aap NALSA helpline 15100 ya apni District Legal Services Authority ke through free legal aid le sakte hain."
       }
     },
     "general_emergency": {
       "contacts": [
         {
-          "name": "Emergency Services",
-          "number": "911"
+          "name": "Emergency Response (ERSS)",
+          "number": "112"
         }
       ],
       "messages": {
-        "en": "If you are in immediate physical danger, please call 911 immediately.",
-        "hi": "यदि आप तत्काल खतरे में हैं, तो कृपया तुरंत 911 पर कॉल करें।",
-        "hinglish": "Agar aap kisi khatre mein hain, toh turant 911 par call karein.",
-        "es": "Si se encuentra en peligro inmediato, llame al 911 de inmediato."
+        "en": "If you are in immediate physical danger, please call 112 right away.",
+        "hi": "यदि आप तत्काल खतरे में हैं, तो कृपया तुरंत 112 पर कॉल करें।",
+        "hinglish": "Agar aap kisi khatre mein hain, toh turant 112 par call karein."
       }
     }
   }

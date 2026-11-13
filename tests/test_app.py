@@ -211,10 +211,10 @@ async def test_safety_event_in_stream():
         assert safety_evt[1]["category"] == "self_harm"
         assert safety_evt[1]["triggered"] is True
 
-        # Verify token content contains crisis helpline (988 or 741741)
+        # Verify token content contains the India crisis helpline (Tele-MANAS 14416)
         tokens = [e[1].get("token", "") for e in events if e[0] == "token"]
         full_tokens = "".join(tokens)
-        assert "988" in full_tokens or "741741" in full_tokens
+        assert "14416" in full_tokens
 
 
 @pytest.mark.asyncio

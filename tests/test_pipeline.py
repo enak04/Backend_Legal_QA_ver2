@@ -45,7 +45,7 @@ async def test_pipeline_crisis_triggers_safety_without_talker():
 
     assert decision.triggered is True
     assert decision.category == "self_harm"
-    assert "988" in reply or "741741" in reply
+    assert "14416" in reply
 
     # Verify talker was NEVER called
     talker_calls = [c for c in fake.call_history if c["prompt_name"] == "talker"]

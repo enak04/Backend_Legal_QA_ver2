@@ -13,7 +13,7 @@ from src.schemas import AffectReading
 # ---------------------------------------------------------------------------
 
 SAFETY_TEST_SENTENCES = [
-    # --- Self Harm (True Positives: English, Hinglish, Spanish) ---
+    # --- Self Harm (True Positives: English, Hinglish, Hindi) ---
     ("I want to end my life", "self_harm"),
     ("I am thinking of committing suicide", "self_harm"),
     ("I might kill myself tonight", "self_harm"),
@@ -27,12 +27,13 @@ SAFETY_TEST_SENTENCES = [
     ("mera marne ka man kar raha hai", "self_harm"),
     ("khudkushi karne ki soch raha hu", "self_harm"),
     ("mujhe aatmhatya karni padegi", "self_harm"),
-    ("quiero suicidarme porque no puedo mas", "self_harm"),
-    ("estoy pensando en quitarme la vida", "self_harm"),
-    ("tengo ganas de matarme", "self_harm"),
-    ("ya no quiero vivir con este dolor", "self_harm"),
+    ("मैं आत्महत्या कर लूंगा", "self_harm"),
+    ("मैं मर जाऊंगा अगर यह केस हार गया", "self_harm"),
+    ("मैं अपनी जान दे दूँगी", "self_harm"),
+    ("अब जीना नहीं चाहता", "self_harm"),
+    ("ख़ुदकुशी के ख़याल आ रहे हैं", "self_harm"),
 
-    # --- Violence / Abuse (True Positives: English, Hinglish, Spanish) ---
+    # --- Violence / Abuse (True Positives: English, Hinglish, Hindi) ---
     ("My spouse threatened to kill me yesterday", "violence_abuse"),
     ("He hit me and gave me a black eye", "violence_abuse"),
     ("My ex is beating me whenever he comes over", "violence_abuse"),
@@ -44,9 +45,10 @@ SAFETY_TEST_SENTENCES = [
     ("woh mere sath maar peet karta hai", "violence_abuse"),
     ("usne mujhe jaan se marne ki dhamki di", "violence_abuse"),
     ("woh mujhe peet raha hai har roz", "violence_abuse"),
-    ("mi pareja me amenazó de muerte", "violence_abuse"),
-    ("sufro de violencia doméstica en casa", "violence_abuse"),
-    ("él me está pegando constantemente", "violence_abuse"),
+    ("मेरा पति मुझे रोज़ मारता है", "violence_abuse"),
+    ("घर में मार-पीट होती है", "violence_abuse"),
+    ("उसने जान से मारने की धमकी दी", "violence_abuse"),
+    ("मैं घरेलू हिंसा की शिकार हूँ", "violence_abuse"),
 
     # --- Child Safety (True Positives) ---
     ("I suspect child abuse in the home", "child_safety"),
@@ -54,18 +56,19 @@ SAFETY_TEST_SENTENCES = [
     ("My neighbor is hitting the kids severely", "child_safety"),
     ("The child neglect is getting terrible", "child_safety"),
     ("woh chote bachhe ko maarna shuru kar deta hai", "child_safety"),
-    ("hay abuso infantil en esa casa", "child_safety"),
+    ("वह बच्चे को मारता है", "child_safety"),
+    ("यहाँ बाल शोषण हो रहा है", "child_safety"),
 
     # --- Arrest / Detention (True Positives) ---
     ("police arrested my brother this morning", "arrest_detention"),
+    ("पुलिस ने मेरे भाई को गिरफ्तार कर लिया", "arrest_detention"),
+    ("मेरे पति हिरासत में हैं", "arrest_detention"),
     ("I got arrested last night", "arrest_detention"),
     ("My son is in police custody right now", "arrest_detention"),
     ("They put in jail without bail", "arrest_detention"),
     ("There is a warrant for my arrest", "arrest_detention"),
     ("police ne pakad liya mere bhai ko", "arrest_detention"),
     ("woh jail mein hai kal raat se", "arrest_detention"),
-    ("la policía arrestó a mi hermano hoy", "arrest_detention"),
-    ("él fue arrestado anoche", "arrest_detention"),
 
     # --- False Positives (Must NOT trigger any safety category -> None) ---
     ("I love watching arrested development on TV", None),

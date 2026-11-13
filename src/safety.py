@@ -14,6 +14,7 @@ Urgency without crisis (e.g. deadlines) does not trigger safety messages.
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -37,14 +38,12 @@ def get_helplines_config() -> dict[str, Any]:
 
 
 def _resolve_language_key(language_str: str) -> str:
-    """Normalizes language name to config key ('en', 'hi', 'hinglish', 'es')."""
+    """Normalizes language name to config key ('en', 'hi', 'hinglish'). Anything else -> English."""
     lang = language_str.strip().lower()
     if "hinglish" in lang:
         return "hinglish"
-    if "hindi" in lang:
+    if "hindi" in lang or "devanagari" in lang:
         return "hi"
-    if "spanish" in lang or "español" in lang:
-        return "es"
     return "en"
 
 
@@ -91,9 +90,8 @@ SELF_HARM_REGEX = re.compile(
     r"\b("
     r"kill\s+myself|end\s+my\s+life|suicide|suicidal|commit(?:ting)?\s+suicide|want\s+to\s+die|harm\s+myself|"
     r"hurt\s+myself|cutting\s+myself|hang\s+myself|better\s+off\s+dead|no\s+reason\s+to\s+live|"
-    r"suicidarme|quitarme\s+la\s+vida|matarme|hacerme\s+daño|no\s+quiero\s+vivir|"
     r"mar\s+jaunga|mar\s+jaungi|jaan\s+de\s+dunga|jaan\s+de\s+dungi|khudkushi|aatmhatya|"
-    r"marne\s+ja\s+raha|marne\s+ka\s+man|jeena\s+nahi\s+chahta|आत्महत्या|मर\s+जाऊंगा"
+    r"marne\s+ja\s+raha|marne\s+ka\s+man|jeena\s+nahi\s+chahta"
     r")\b",
     re.IGNORECASE,
 )
@@ -104,8 +102,7 @@ VIOLENCE_ABUSE_REGEX = re.compile(
     r"hit\s+me|beat\s+me|beating\s+me|abusing\s+me|domestic\s+violence|threatened\s+to\s+kill|"
     r"strangled|choked\s+me|stalking\s+me|sexual\s+assault|rape|raped|will\s+shoot\s+me|"
     r"stabbed|going\s+to\s+kill\s+him|going\s+to\s+shoot\s+her|will\s+murder|"
-    r"maar\s+peet|jaan\s+se\s+marne\s+ki\s+dhamki|peet\s+raha\s+hai|domestic\s+abuse|"
-    r"violencia\s+doméstica|me\s+está\s+pegando|me\s+amenazó\s+de\s+muerte|abuso\s+sexual"
+    r"maar\s+peet|jaan\s+se\s+marne\s+ki\s+dhamki|peet\s+raha\s+hai|domestic\s+abuse"
     r")\b",
     re.IGNORECASE,
 )
@@ -115,7 +112,7 @@ CHILD_SAFETY_REGEX = re.compile(
     r"\b("
     r"child\s+abuse|child\s+neglect|hurting\s+my\s+child|hurting\s+the\s+baby|"
     r"molesting\s+a\s+child|pedophile|hitting\s+the\s+kids|child\s+endangerment|"
-    r"bachhe\s+ko\s+maarna|bacho\s+par\s+atyachar|abuso\s+infantil|maltrato\s+infantil"
+    r"bachhe\s+ko\s+maarna|bacho\s+par\s+atyachar"
     r")\b",
     re.IGNORECASE,
 )
@@ -126,10 +123,43 @@ ARREST_DETENTION_REGEX = re.compile(
     r"police\s+arrested|arrested\s+my|got\s+arrested|in\s+police\s+custody|put\s+in\s+jail|"
     r"sent\s+to\s+jail|detained\s+by\s+police|facing\s+arrest|handcuffed|held\s+in\s+custody|"
     r"warrant\s+for\s+my\s+arrest|"
-    r"police\s+ne\s+pakad\s+liya|police\s+arrest|jail\s+mein\s+hai|hiraasat\s+mein|arrest\s+kar\s+liya|"
-    r"policía\s+arrestó|fue\s+arrestado|en\s+la\s+cárcel"
+    r"police\s+ne\s+pakad\s+liya|police\s+arrest|jail\s+mein\s+hai|hiraasat\s+mein|arrest\s+kar\s+liya"
     r")\b",
     re.IGNORECASE,
+)
+
+# Hindi in Devanagari script. Kept separate from the patterns above because \b does not work
+# reliably with Devanagari vowel signs (they are not "word" characters to the regex engine), so
+# "\bआत्महत्या\b" never matches. These phrases are specific enough to match anywhere.
+# Messages are NFC-normalised first; nukta (\u093C) is optional, and chandrabindu/anusvara are
+# treated as the same.
+_N = "\u093C?"   # optional nukta: ख़ / ख, ज़ / ज
+_AN = "[\u0901\u0902]"   # ँ or ं
+
+def _dev(pattern: str) -> re.Pattern:
+    """Compiles a Devanagari pattern after NFC-normalising it, the same way messages are."""
+    return re.compile(unicodedata.normalize("NFC", pattern))
+
+
+DEVANAGARI_SELF_HARM_REGEX = _dev(
+    "आत्महत्या|ख" + _N + "ुदकुशी|"
+    "मर\\s+जा(?:ऊ|उ)" + _AN + "?ग[ाी]|"
+    "(?:अपनी\\s+)?जान\\s+दे\\s+द(?:ू|ु)" + _AN + "?ग[ाी]|"
+    "जान\\s+ले\\s+ल(?:ू|ु)" + _AN + "?ग[ाी]|"
+    "जीना\\s+नहीं\\s+चाहत[ाी]|मरना\\s+चाहत[ाी]|मरने\\s+का\\s+मन|"
+    "ख" + _N + "ुद\\s+को\\s+(?:नुकसान|ख" + _N + "त्म)"
+)
+DEVANAGARI_VIOLENCE_ABUSE_REGEX = _dev(
+    "मार\\s*-?\\s*पीट|घरेलू\\s+हिंसा|बलात्कार|यौन\\s+(?:उत्पीड़न|उत्पीडन|शोषण)|"
+    "जान\\s+से\\s+मारने\\s+की\\s+धमकी|"
+    "मुझे\\s+(?:रोज" + _N + "\\s+)?(?:मारत[ाीे]|पीटत[ाीे]|पीट\\s+रह[ाीे])"
+)
+DEVANAGARI_CHILD_SAFETY_REGEX = _dev(
+    "बाल\\s+(?:शोषण|उत्पीड़न|उत्पीडन)|"
+    "बच्च(?:े|ों)\\s+(?:को|पर)\\s+(?:मारत[ाीे]|पीटत[ाीे]|अत्याचार)"
+)
+DEVANAGARI_ARREST_DETENTION_REGEX = _dev(
+    "गिरफ" + _N + "्तार|हिरासत\\s+में|पुलिस\\s+ने\\s+.{0,20}पकड़|जेल\\s+(?:में\\s+है|भेज)"
 )
 
 # Explicit exclusion for idioms and false positives
@@ -169,7 +199,7 @@ def detect_keywords(message: str) -> str | None:
     self_harm > violence_abuse > child_safety > arrest_detention.
     Returns the category name or None.
     """
-    clean_msg = message.strip()
+    clean_msg = unicodedata.normalize("NFC", message.strip())
     if not clean_msg:
         return None
 
@@ -177,18 +207,20 @@ def detect_keywords(message: str) -> str | None:
     is_pure_false_positive = any(fp.search(clean_msg) for fp in FALSE_POSITIVES_EXCLUSIONS)
 
     # 1. Self Harm
-    if SELF_HARM_REGEX.search(clean_msg):
+    if SELF_HARM_REGEX.search(clean_msg) or DEVANAGARI_SELF_HARM_REGEX.search(clean_msg):
         return "self_harm"
 
     # 2. Violence / Abuse
-    if VIOLENCE_ABUSE_REGEX.search(clean_msg):
+    if VIOLENCE_ABUSE_REGEX.search(clean_msg) or DEVANAGARI_VIOLENCE_ABUSE_REGEX.search(clean_msg):
         return "violence_abuse"
 
     # 3. Child Safety
-    if CHILD_SAFETY_REGEX.search(clean_msg):
+    if CHILD_SAFETY_REGEX.search(clean_msg) or DEVANAGARI_CHILD_SAFETY_REGEX.search(clean_msg):
         return "child_safety"
 
     # 4. Arrest / Detention
+    if DEVANAGARI_ARREST_DETENTION_REGEX.search(clean_msg):
+        return "arrest_detention"
     if ARREST_DETENTION_REGEX.search(clean_msg):
         if is_pure_false_positive and not any(kw in clean_msg.lower() for kw in ("police", "jail", "cops", "custody", "warrant")):
             return None

@@ -349,7 +349,13 @@ def test_code_guard_allows_persons_own_facts():
 
 def test_helpline_reply_has_lead_in_and_verbatim_message():
     cat = get_helplines_config()["categories"]["self_harm"]
-    for lang_name, key in (("English", "en"), ("Hinglish", "hinglish"), ("Spanish", "es")):
+    for lang_name, key in (("English", "en"), ("Hindi", "hi"), ("Hinglish", "hinglish")):
         reply = get_helpline_reply("self_harm", lang_name)
         assert reply.startswith(cat["lead_in"][key])
         assert reply.endswith(cat["messages"][key])
+
+
+def test_unsupported_language_falls_back_to_english_helpline():
+    cat = get_helplines_config()["categories"]["self_harm"]
+    assert get_helpline_reply("self_harm", "Spanish").endswith(cat["messages"]["en"])
+    assert "es" not in cat["messages"]
